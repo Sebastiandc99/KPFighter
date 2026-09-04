@@ -3,75 +3,93 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-  <meta name="theme-color" content="#08101e">
-  <meta name="description" content="KP Fighter: Sergio contra Blotta. Juego de lucha arcade para computadora y celular.">
+  <meta name="theme-color" content="#020716">
+  <meta name="description" content="KP Fighter: Sergio contra Blotta. Juego arcade de lucha para computadora y celular.">
   <title>KP Fighter — Sergio vs Blotta</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="shell">
-    <header class="topbar">
-      <div class="brand" aria-label="KP Fighter"><span>KP</span> FIGHTER</div>
-      <button id="soundBtn" class="icon-btn" type="button" aria-label="Activar o desactivar sonido">🔊</button>
-    </header>
+  <main id="arcade" class="arcade" aria-label="KP Fighter">
+    <div class="cabinet-bezel" aria-hidden="true"></div>
 
-    <section id="selectScreen" class="select-screen" aria-labelledby="selectTitle">
-      <div class="select-copy">
-        <p class="eyebrow">PLAYER SELECT</p>
-        <h1 id="selectTitle">ELIGE TU LUCHADOR</h1>
-        <p>El otro personaje será controlado por la máquina.</p>
+    <section id="titleScreen" class="screen title-screen active" aria-labelledby="gameTitle">
+      <div class="title-fighter title-sergio" aria-hidden="true"></div>
+      <div class="title-fighter title-blotta" aria-hidden="true"></div>
+      <div class="title-center">
+        <p class="title-super">SUPER</p>
+        <h1 id="gameTitle"><span>KP</span> FIGHTER <em>II</em></h1>
+        <p class="title-sub">SERGIO <b>VS</b> BLOTTA</p>
+        <button id="startBtn" class="start-btn" type="button">PRESIONA START</button>
+        <p class="title-credit">1 PLAYER · ARCADE EDITION</p>
       </div>
-      <div class="fighter-grid">
-        <button class="fighter-card sergio-card" type="button" data-pick="sergio">
-          <span class="card-art sprite-preview sergio-preview" aria-hidden="true"></span>
-          <span class="card-info">
-            <strong>SERGIO</strong>
-            <small>Panzazo · Patada voladora<br>Asado · Fernet</small>
-            <span class="pick-label">JUGAR CON SERGIO</span>
-          </span>
-        </button>
-        <div class="versus" aria-hidden="true">VS</div>
-        <button class="fighter-card blotta-card" type="button" data-pick="blotta">
-          <span class="card-art sprite-preview blotta-preview" aria-hidden="true"></span>
-          <span class="card-info">
-            <strong>BLOTTA</strong>
-            <small>Karate · Patada voladora<br>Golpe de energía</small>
-            <span class="pick-label">JUGAR CON BLOTTA</span>
-          </span>
-        </button>
-      </div>
-      <p class="start-hint">Teclado o controles táctiles · Mejor en pantalla horizontal</p>
     </section>
 
-    <section id="gameScreen" class="game-screen" hidden>
-      <div id="arena" class="arena">
-        <canvas id="game" width="960" height="540" aria-label="Combate entre Sergio y Blotta"></canvas>
+    <section id="selectScreen" class="screen select-screen" aria-labelledby="selectTitle">
+      <header class="select-header">
+        <span class="player-one">1P</span>
+        <h2 id="selectTitle">SELECT YOUR FIGHTER</h2>
+        <span class="select-clock" id="selectClock">15</span>
+      </header>
 
-        <div class="hud" aria-hidden="true">
-          <div class="hud-side left-hud">
-            <div class="name-row"><strong id="leftName">SERGIO</strong><span id="leftTag">TÚ</span></div>
-            <div class="health-shell"><div id="leftHealth" class="health-fill"></div></div>
-            <div class="power-shell"><div id="leftPower" class="power-fill"></div></div>
-          </div>
-          <div id="timer" class="timer">60</div>
-          <div class="hud-side right-hud">
-            <div class="name-row"><span id="rightTag">CPU</span><strong id="rightName">BLOTTA</strong></div>
-            <div class="health-shell"><div id="rightHealth" class="health-fill"></div></div>
-            <div class="power-shell"><div id="rightPower" class="power-fill"></div></div>
-          </div>
+      <div class="portrait portrait-sergio selected" data-portrait="sergio" aria-hidden="true">
+        <img src="assets/sergio-portrait.png" alt="">
+        <span>SERGIO</span>
+      </div>
+      <div class="portrait portrait-blotta" data-portrait="blotta" aria-hidden="true">
+        <img src="assets/blotta-portrait.png" alt="">
+        <span>BLOTTA</span>
+      </div>
+      <div class="select-versus" aria-hidden="true">VS</div>
+
+      <div class="choice-dock" role="group" aria-label="Elegir luchador">
+        <p class="choose-label">CHOOSE YOUR FIGHTER</p>
+        <div class="choice-row">
+          <button class="choice-tile selected" type="button" data-pick="sergio" aria-label="Elegir a Sergio">
+            <span class="p1-arrow" aria-hidden="true">▼<small>1P</small></span>
+            <img src="assets/sergio-portrait.png" alt="Sergio">
+            <strong>SERGIO</strong>
+          </button>
+          <button class="choice-tile" type="button" data-pick="blotta" aria-label="Elegir a Blotta">
+            <span class="p1-arrow" aria-hidden="true">▼<small>1P</small></span>
+            <img src="assets/blotta-portrait.png" alt="Blotta">
+            <strong>BLOTTA</strong>
+          </button>
         </div>
+        <button id="confirmBtn" class="confirm-btn" type="button">FIGHT!</button>
+      </div>
 
-        <div id="announcement" class="announcement" aria-live="assertive"></div>
-        <div id="speechBubble" class="speech-bubble" hidden>Te voy a echar</div>
-        <div id="flash" class="hit-flash" aria-hidden="true"></div>
+      <p class="select-help">← → ELEGIR · ENTER CONFIRMAR</p>
+    </section>
 
-        <div id="resultPanel" class="result-panel" hidden>
-          <p id="resultKicker">K.O.</p>
-          <h2 id="resultTitle">¡GANASTE!</h2>
-          <div class="result-actions">
-            <button id="rematchBtn" class="arcade-btn primary" type="button">REVANCHA</button>
-            <button id="selectBtn" class="arcade-btn" type="button">CAMBIAR LUCHADOR</button>
-          </div>
+    <section id="gameScreen" class="screen fight-screen" aria-label="Combate">
+      <canvas id="game" width="960" height="540" aria-label="Combate entre Sergio y Blotta"></canvas>
+
+      <div class="hud" aria-hidden="true">
+        <div class="hud-side left-hud">
+          <div class="name-row"><strong id="leftName">SERGIO</strong><span>1P</span></div>
+          <div class="health-shell"><div id="leftHealth" class="health-fill"></div></div>
+          <div class="power-shell"><div id="leftPower" class="power-fill"></div></div>
+        </div>
+        <div id="timer" class="timer">60</div>
+        <div class="hud-side right-hud">
+          <div class="name-row"><span>CPU</span><strong id="rightName">BLOTTA</strong></div>
+          <div class="health-shell"><div id="rightHealth" class="health-fill"></div></div>
+          <div class="power-shell"><div id="rightPower" class="power-fill"></div></div>
+        </div>
+      </div>
+
+      <button id="soundBtn" class="corner-btn sound-btn" type="button" aria-label="Desactivar sonido">♪</button>
+      <button id="pauseBtn" class="corner-btn pause-btn" type="button" aria-label="Pausar juego">Ⅱ</button>
+      <div id="announcement" class="announcement" aria-live="assertive"></div>
+      <div id="speechBubble" class="speech-bubble" hidden>¡Te voy a echar!</div>
+      <div id="flash" class="hit-flash" aria-hidden="true"></div>
+
+      <div id="resultPanel" class="result-panel" hidden>
+        <p id="resultKicker">K.O.</p>
+        <h2 id="resultTitle">¡GANASTE!</h2>
+        <div class="result-actions">
+          <button id="rematchBtn" class="arcade-btn primary" type="button">REVANCHA</button>
+          <button id="selectBtn" class="arcade-btn" type="button">SELECCIÓN</button>
         </div>
       </div>
 
@@ -82,23 +100,25 @@
           <button class="touch-btn direction" data-hold="right" type="button" aria-label="Mover a la derecha">▶</button>
         </div>
         <div class="attack-controls">
-          <button class="touch-btn attack punch" data-tap="punch" type="button"><span>A</span>GOLPE</button>
-          <button class="touch-btn attack kick" data-tap="kick" type="button"><span>B</span>PATADA</button>
-          <button class="touch-btn attack special" data-tap="special" type="button"><span>★</span>PODER</button>
+          <button class="touch-btn attack punch" data-tap="punch" type="button" aria-label="Golpe"><span>A</span></button>
+          <button class="touch-btn attack kick" data-tap="kick" type="button" aria-label="Patada"><span>B</span></button>
+          <button class="touch-btn attack special" data-tap="special" type="button" aria-label="Poder especial"><span>★</span></button>
         </div>
       </div>
 
-      <div class="desktop-help">
-        <span><kbd>A</kbd><kbd>D</kbd> mover</span>
-        <span><kbd>W</kbd> saltar</span>
-        <span><kbd>J</kbd> golpe</span>
-        <span><kbd>K</kbd> patada</span>
-        <span><kbd>L</kbd> poder</span>
-        <button id="pauseBtn" type="button">Pausa <kbd>P</kbd></button>
+      <div class="desktop-help" aria-hidden="true">
+        <span><kbd>A</kbd><kbd>D</kbd> MOVER</span>
+        <span><kbd>W</kbd> SALTAR</span>
+        <span><kbd>J</kbd> GOLPE</span>
+        <span><kbd>K</kbd> PATADA</span>
+        <span><kbd>L</kbd> PODER</span>
       </div>
     </section>
+
+    <div class="scanlines" aria-hidden="true"></div>
   </main>
 
+  <aside class="rotate-note">Giralo para jugar mejor en modo horizontal</aside>
   <script src="game.js"></script>
 </body>
 </html>

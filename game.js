@@ -5,9 +5,11 @@ const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
 
 const ui = {
+  titleScreen: document.getElementById("titleScreen"),
   selectScreen: document.getElementById("selectScreen"),
   gameScreen: document.getElementById("gameScreen"),
-  arena: document.getElementById("arena"),
+  startBtn: document.getElementById("startBtn"),
+  confirmBtn: document.getElementById("confirmBtn"),
   announcement: document.getElementById("announcement"),
   speech: document.getElementById("speechBubble"),
   resultPanel: document.getElementById("resultPanel"),
@@ -27,8 +29,8 @@ const ui = {
 
 const assets = {
   arena: loadImage("assets/arena.jpg"),
-  sergio: loadImage("assets/sergio-sheet.png"),
-  blotta: loadImage("assets/blotta-sheet.png")
+  sergio: loadImage("assets/sergio-atlas-v2.png"),
+  blotta: loadImage("assets/blotta-atlas-v2-clean.png")
 };
 
 const POSES = {
@@ -41,7 +43,7 @@ const stats = {
   blotta: { name: "BLOTTA", speed: 265, jump: 680, defaultFace: -1 }
 };
 
-let state = "select";
+let state = "title";
 let playerChoice = "sergio";
 let player = null;
 let cpu = null;
@@ -73,6 +75,35 @@ function makeFighter(kind, x, isPlayer) {
   };
 }
 
+function showScreen(screen) {
+  [ui.titleScreen, ui.selectScreen, ui.gameScreen].forEach(node => {
+    node.classList.toggle("active", node === screen);
+  });
+}
+
+function chooseFighter(kind, playSound = true) {
+  playerChoice = kind;
+  document.querySelectorAll("[data-pick]").forEach(button => {
+    button.classList.toggle("selected", button.dataset.pick === kind);
+  });
+  document.querySelectorAll("[data-portrait]").forEach(portrait => {
+    portrait.classList.toggle("selected", portrait.dataset.portrait === kind);
+  });
+  if (playSound) sfx("move");
+}
+
+function openSelection() {
+  introToken++;
+  state = "select";
+  held.left = held.right = false;
+  ui.resultPanel.hidden = true;
+  ui.speech.hidden = true;
+  showScreen(ui.selectScreen);
+  chooseFighter(playerChoice, false);
+  ensureAudio();
+  sfx("start");
+}
+
 function startGame(choice) {
   playerChoice = choice;
   const other = choice === "sergio" ? "blotta" : "sergio";
@@ -87,8 +118,7 @@ function startGame(choice) {
   aiClock = 0;
   screenShake = 0;
   state = "intro";
-  ui.selectScreen.hidden = true;
-  ui.gameScreen.hidden = false;
+  showScreen(ui.gameScreen);
   ui.resultPanel.hidden = true;
   ui.leftName.textContent = stats[player.kind].name;
   ui.rightName.textContent = stats[cpu.kind].name;
@@ -440,9 +470,10 @@ function drawFighter(f) {
   const image = assets[f.kind];
   if (!image.complete) return;
   const pose = poseFor(f);
-  const sx = (pose % 3) * 256;
-  const sy = Math.floor(pose / 3) * 256;
-  const size = f.kind === "sergio" ? 310 : 300;
+  const cell = 270;
+  const sx = (pose % 3) * cell;
+  const sy = Math.floor(pose / 3) * cell;
+  const size = f.kind === "sergio" ? 304 : 296;
   const desiredFace = f.facing;
   const needsFlip = desiredFace !== stats[f.kind].defaultFace;
   const bob = f.action === "idle" && f.grounded ? Math.sin(performance.now() / 180) * 2 : 0;
@@ -451,7 +482,7 @@ function drawFighter(f) {
   ctx.translate(f.x, f.y + bob);
   if (needsFlip) ctx.scale(-1, 1);
   if (f.flash > 0 && Math.floor(f.flash * 40) % 2 === 0) ctx.globalAlpha = .42;
-  ctx.drawImage(image, sx, sy, 256, 256, -size / 2, -size * .94, size, size);
+  ctx.drawImage(image, sx, sy, cell, cell, -size / 2, -size * .94, size, size);
   ctx.restore();
 }
 
@@ -512,7 +543,7 @@ function loop(now) {
   const dt = Math.min(.032, (now - lastTime) / 1000);
   lastTime = now;
   update(dt);
-  if (state !== "select") draw();
+  if (["intro", "playing", "paused", "finished"].includes(state)) draw();
   requestAnimationFrame(loop);
 }
 
@@ -540,6 +571,8 @@ function sfx(name) {
   if (muted) return;
   const sounds = {
     start: () => { tone(130, .12); setTimeout(() => tone(195, .18), 110); },
+    move: () => tone(290, .055, "square", .025, 70),
+    confirm: () => { tone(330, .08, "square", .035); setTimeout(() => tone(660, .14, "square", .035), 70); },
     fight: () => { tone(260, .12, "sawtooth", .05, 380); setTimeout(() => tone(520, .18), 100); },
     jump: () => tone(170, .11, "square", .025, 180),
     punch: () => tone(95, .08, "sawtooth", .04, -40),
@@ -553,18 +586,25 @@ function sfx(name) {
   (sounds[name] || (() => {}))();
 }
 
+ui.startBtn.addEventListener("click", openSelection);
+
 document.querySelectorAll("[data-pick]").forEach(btn => {
-  btn.addEventListener("click", () => startGame(btn.dataset.pick));
+  btn.addEventListener("click", () => chooseFighter(btn.dataset.pick));
+  btn.addEventListener("dblclick", () => {
+    chooseFighter(btn.dataset.pick, false);
+    sfx("confirm");
+    startGame(playerChoice);
+  });
+});
+
+ui.confirmBtn.addEventListener("click", () => {
+  sfx("confirm");
+  startGame(playerChoice);
 });
 
 document.getElementById("rematchBtn").addEventListener("click", () => startGame(playerChoice));
 document.getElementById("selectBtn").addEventListener("click", () => {
-  introToken++;
-  state = "select";
-  ui.gameScreen.hidden = true;
-  ui.selectScreen.hidden = false;
-  ui.resultPanel.hidden = true;
-  ui.speech.hidden = true;
+  openSelection();
 });
 ui.pauseBtn.addEventListener("click", togglePause);
 
@@ -578,6 +618,23 @@ ui.soundBtn.addEventListener("click", () => {
 window.addEventListener("keydown", event => {
   const key = event.key.toLowerCase();
   if (["a", "d", "w", "j", "k", "l", "p", "arrowleft", "arrowright", "arrowup", " "].includes(key)) event.preventDefault();
+
+  if (state === "title") {
+    if (!event.repeat && (key === "enter" || key === " ")) openSelection();
+    return;
+  }
+
+  if (state === "select") {
+    if (!event.repeat && ["a", "d", "arrowleft", "arrowright"].includes(key)) {
+      chooseFighter(playerChoice === "sergio" ? "blotta" : "sergio");
+    }
+    if (!event.repeat && (key === "enter" || key === " " || key === "j")) {
+      sfx("confirm");
+      startGame(playerChoice);
+    }
+    return;
+  }
+
   if (key === "a" || key === "arrowleft") held.left = true;
   if (key === "d" || key === "arrowright") held.right = true;
   if (event.repeat) return;
@@ -623,7 +680,7 @@ document.querySelectorAll("[data-tap]").forEach(btn => {
 });
 
 document.addEventListener("contextmenu", event => {
-  if (state !== "select") event.preventDefault();
+  if (state !== "title" && state !== "select") event.preventDefault();
 });
 
 requestAnimationFrame(loop);
