@@ -50,6 +50,7 @@ let cpu = null;
 let fighters = [];
 let projectiles = [];
 let particles = [];
+let afterimages = [];
 let held = { left: false, right: false };
 let roundTime = 60;
 let secondAccumulator = 0;
@@ -57,6 +58,7 @@ let lastTime = performance.now();
 let introToken = 0;
 let aiClock = 0;
 let screenShake = 0;
+let stageTime = 0;
 let muted = false;
 let audioCtx = null;
 
@@ -70,6 +72,10 @@ function makeFighter(kind, x, isPlayer) {
   return {
     kind, x, y: 438, vx: 0, vy: 0, health: 100, power: 32,
     isPlayer, grounded: true, action: "idle", actionTime: 0,
+    actionDuration: 0, animClock: Math.random() * 4, trailClock: 0,
+    specialSpawned: false, specialStyle: "ki",
+    queuedAction: null, queueTime: 0,
+    landingSquash: 0, wasGrounded: true,
     attackLanded: false, invuln: 0, specialCooldown: 0,
     projectileToggle: 0, facing: x < 480 ? 1 : -1, flash: 0
   };
@@ -98,6 +104,7 @@ function openSelection() {
   held.left = held.right = false;
   ui.resultPanel.hidden = true;
   ui.speech.hidden = true;
+  setPauseUI(false);
   showScreen(ui.selectScreen);
   chooseFighter(playerChoice, false);
   ensureAudio();
@@ -112,13 +119,16 @@ function startGame(choice) {
   fighters = [player, cpu];
   projectiles = [];
   particles = [];
+  afterimages = [];
   held.left = held.right = false;
   roundTime = 60;
   secondAccumulator = 0;
   aiClock = 0;
   screenShake = 0;
+  stageTime = 0;
   state = "intro";
   showScreen(ui.gameScreen);
+  setPauseUI(false);
   ui.resultPanel.hidden = true;
   ui.leftName.textContent = stats[player.kind].name;
   ui.rightName.textContent = stats[cpu.kind].name;
@@ -153,7 +163,7 @@ function beginIntro() {
 function announce(text, duration) {
   ui.announcement.textContent = text;
   ui.announcement.classList.add("show");
-  setTimeout(() => ui.announcement.classList.remove("show"), duration);
+  if (duration) setTimeout(() => ui.announcement.classList.remove("show"), duration);
 }
 
 function positionSpeech() {
@@ -164,6 +174,7 @@ function positionSpeech() {
 
 function update(dt) {
   if (state !== "playing") return;
+  stageTime += dt;
 
   secondAccumulator += dt;
   if (secondAccumulator >= 1) {
@@ -173,25 +184,27 @@ function update(dt) {
     if (roundTime === 0) finishRound(player.health >= cpu.health ? player : cpu, "TIEMPO");
   }
 
-  updatePlayer();
+  updatePlayer(dt);
   updateAI(dt);
   fighters.forEach(f => updateFighter(f, dt));
   separateFighters();
   updateProjectiles(dt);
   updateParticles(dt);
+  updateAfterimages(dt);
   updateHud();
   screenShake = Math.max(0, screenShake - dt * 26);
 }
 
-function updatePlayer() {
+function updatePlayer(dt) {
   if (!player || isLocked(player)) return;
   let direction = 0;
   if (held.left) direction -= 1;
   if (held.right) direction += 1;
   if (direction) {
-    player.vx = direction * stats[player.kind].speed;
+    const targetSpeed = direction * stats[player.kind].speed;
+    player.vx += (targetSpeed - player.vx) * Math.min(1, dt * 16);
   } else if (player.grounded) {
-    player.vx *= .7;
+    player.vx *= Math.pow(.0005, dt);
   }
 }
 
@@ -226,6 +239,11 @@ function updateAI(dt) {
 }
 
 function updateFighter(f, dt) {
+  const previouslyGrounded = f.grounded;
+  f.animClock += dt;
+  f.queueTime = Math.max(0, f.queueTime - dt);
+  if (f.queueTime === 0) f.queuedAction = null;
+  f.landingSquash = Math.max(0, f.landingSquash - dt);
   f.invuln = Math.max(0, f.invuln - dt);
   f.specialCooldown = Math.max(0, f.specialCooldown - dt);
   f.flash = Math.max(0, f.flash - dt);
@@ -238,8 +256,13 @@ function updateFighter(f, dt) {
     f.actionTime -= dt;
     resolveAttackFrame(f, opponent);
     if (f.actionTime <= 0) {
+      const queuedAction = f.queueTime > 0 ? f.queuedAction : null;
       f.action = "idle";
+      f.actionDuration = 0;
       f.attackLanded = false;
+      f.queuedAction = null;
+      f.queueTime = 0;
+      if (queuedAction) attack(f, queuedAction);
     }
   }
 
@@ -249,32 +272,61 @@ function updateFighter(f, dt) {
   f.x = Math.max(65, Math.min(895, f.x));
 
   if (f.y >= 438) {
+    const landingSpeed = f.vy;
     f.y = 438;
     f.vy = 0;
     f.grounded = true;
-    if (!isLocked(f)) f.vx *= .76;
+    if (!previouslyGrounded && landingSpeed > 180) {
+      f.landingSquash = .16;
+      dustBurst(f.x, 445, Math.min(10, Math.round(landingSpeed / 75)));
+      screenShake = Math.max(screenShake, 2.5);
+    }
+    if (isLocked(f) && f.action !== "kick" && f.action !== "hit") {
+      f.vx *= Math.pow(.015, dt);
+    } else if (!isLocked(f)) {
+      f.vx *= .985;
+    }
   } else {
     f.grounded = false;
     f.vx *= .994;
   }
+
+  const progress = actionProgress(f);
+  if (f.action === "special" && progress > .32 && !f.specialSpawned) {
+    f.specialSpawned = true;
+    spawnProjectile(f, f.specialStyle);
+  }
+  const leavesTrail = (f.action === "kick" && progress > .18 && progress < .76)
+    || (f.action === "special" && progress > .22 && progress < .7);
+  if (leavesTrail) {
+    f.trailClock -= dt;
+    if (f.trailClock <= 0) {
+      addAfterimage(f);
+      f.trailClock = .055;
+    }
+  } else {
+    f.trailClock = 0;
+  }
+
+  f.wasGrounded = f.grounded;
 }
 
 function resolveAttackFrame(f, target) {
   if (f.attackLanded || f.action === "hit") return;
-  const elapsedWindow = f.actionTime;
+  const progress = actionProgress(f);
   const distance = Math.abs(target.x - f.x);
   let active = false;
   let damage = 0;
   let reach = 0;
   let knock = 0;
 
-  if (f.action === "punch" && elapsedWindow < .36) {
-    active = true; damage = f.kind === "sergio" ? 10 : 8; reach = f.kind === "sergio" ? 118 : 105; knock = 170;
-  } else if (f.action === "kick" && elapsedWindow < .48) {
-    active = true; damage = f.kind === "sergio" ? 12 : 11; reach = 142; knock = 245;
+  if (f.action === "punch" && progress > .22 && progress < .64) {
+    active = true; damage = f.kind === "sergio" ? 10 : 8; reach = f.kind === "sergio" ? 104 : 96; knock = 170;
+  } else if (f.action === "kick" && progress > .26 && progress < .7) {
+    active = true; damage = f.kind === "sergio" ? 12 : 11; reach = 124; knock = 235;
   }
 
-  if (active && distance < reach && Math.abs(target.y - f.y) < 125) {
+  if (active && distance < reach && Math.abs(target.y - f.y) < 105) {
     f.attackLanded = true;
     hit(target, damage, f.facing * knock, f.action === "kick" ? -250 : -120, f);
   }
@@ -282,7 +334,7 @@ function resolveAttackFrame(f, target) {
 
 function separateFighters() {
   const dx = cpu.x - player.x;
-  const overlap = 78 - Math.abs(dx);
+  const overlap = 64 - Math.abs(dx);
   if (overlap > 0) {
     const push = overlap / 2;
     const sign = Math.sign(dx) || 1;
@@ -299,7 +351,14 @@ function jump(f) {
 }
 
 function attack(f, type) {
-  if (state !== "playing" || isLocked(f)) return;
+  if (state !== "playing") return;
+  if (isLocked(f)) {
+    if (f.isPlayer && f.action !== "hit") {
+      f.queuedAction = type;
+      f.queueTime = .18;
+    }
+    return;
+  }
   if (type === "special") {
     if (f.power < 35 || f.specialCooldown > 0) {
       if (f.isPlayer) sfx("empty");
@@ -308,22 +367,22 @@ function attack(f, type) {
     f.power -= 35;
     f.specialCooldown = .85;
     f.action = "special";
-    f.actionTime = .62;
+    f.actionDuration = .72;
+    f.actionTime = f.actionDuration;
+    f.specialSpawned = false;
     f.vx *= .2;
-    const style = f.kind === "sergio" ? (f.projectileToggle++ % 2 ? "bottle" : "meat") : "ki";
-    setTimeout(() => {
-      if (state === "playing" && f.health > 0) spawnProjectile(f, style);
-    }, 210);
+    f.specialStyle = f.kind === "sergio" ? (f.projectileToggle++ % 2 ? "bottle" : "meat") : "ki";
     sfx("special");
     return;
   }
 
   f.action = type;
-  f.actionTime = type === "punch" ? .52 : .68;
+  f.actionDuration = type === "punch" ? .44 : .62;
+  f.actionTime = f.actionDuration;
   f.attackLanded = false;
   if (type === "kick") {
-    f.vx = f.facing * 335;
-    if (f.grounded) f.vy = -310;
+    f.vx = f.facing * 300;
+    if (f.grounded) f.vy = -275;
   } else {
     f.vx = f.facing * (f.kind === "sergio" ? 165 : 105);
   }
@@ -337,7 +396,7 @@ function spawnProjectile(owner, style) {
       ? { speed: 425, damage: 13, radius: 22 }
       : { speed: 395, damage: 11, radius: 25 };
   projectiles.push({
-    owner, style, x: owner.x + owner.facing * 66, y: owner.y - 122,
+    owner, style, x: owner.x + owner.facing * 58, y: owner.y - 92,
     vx: owner.facing * config.speed, vy: style === "ki" ? 0 : -80,
     damage: config.damage, radius: config.radius, life: 2.3, spin: 0
   });
@@ -354,8 +413,8 @@ function updateProjectiles(dt) {
       p.y += p.vy * dt;
     }
     const target = p.owner === player ? cpu : player;
-    const hitDistance = Math.hypot(p.x - target.x, p.y - (target.y - 105));
-    if (target.invuln <= 0 && hitDistance < p.radius + 42) {
+    const hitDistance = Math.hypot(p.x - target.x, p.y - (target.y - 82));
+    if (target.invuln <= 0 && hitDistance < p.radius + 34) {
       hit(target, p.damage, Math.sign(p.vx) * 210, -155, p.owner);
       burst(p.x, p.y, p.style === "ki" ? "#65d8ff" : "#ffbf3d", 13);
       projectiles.splice(i, 1);
@@ -372,12 +431,13 @@ function hit(target, damage, knockX, knockY, attacker) {
   attacker.power = Math.min(100, attacker.power + damage * .75);
   target.invuln = .36;
   target.action = "hit";
-  target.actionTime = .38;
+  target.actionDuration = .4;
+  target.actionTime = target.actionDuration;
   target.vx = knockX;
   target.vy = knockY;
   target.flash = .18;
   screenShake = damage > 12 ? 10 : 6;
-  burst(target.x, target.y - 105, damage > 12 ? "#fff45c" : "#ff7d3b", 10);
+  burst(target.x, target.y - 82, damage > 12 ? "#fff45c" : "#ff7d3b", 10);
   ui.flash.classList.remove("on");
   void ui.flash.offsetWidth;
   ui.flash.classList.add("on");
@@ -389,6 +449,7 @@ function hit(target, damage, knockX, knockY, attacker) {
 function finishRound(winner, reason) {
   if (state !== "playing") return;
   state = "finished";
+  setPauseUI(false);
   held.left = held.right = false;
   ui.resultKicker.textContent = reason;
   ui.resultTitle.textContent = winner === player ? "¡GANASTE!" : `${stats[winner.kind].name} GANA`;
@@ -401,11 +462,51 @@ function isLocked(f) {
   return f.actionTime > 0 && f.action !== "idle";
 }
 
+function actionProgress(f) {
+  if (!f.actionDuration) return 0;
+  return Math.max(0, Math.min(1, 1 - f.actionTime / f.actionDuration));
+}
+
 function burst(x, y, color, count) {
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = 70 + Math.random() * 230;
     particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: .35 + Math.random() * .25, color, size: 3 + Math.random() * 6 });
+  }
+}
+
+function dustBurst(x, y, count) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x: x + (Math.random() - .5) * 44,
+      y,
+      vx: (Math.random() - .5) * 95,
+      vy: -20 - Math.random() * 75,
+      gravity: 105,
+      life: .28 + Math.random() * .22,
+      color: Math.random() > .5 ? "#d7b26c" : "#7f6844",
+      size: 3 + Math.random() * 7
+    });
+  }
+}
+
+function addAfterimage(f) {
+  afterimages.push({
+    kind: f.kind,
+    pose: poseFor(f),
+    x: f.x,
+    y: f.y,
+    facing: f.facing,
+    motion: fighterMotion(f),
+    life: .18,
+    maxLife: .18
+  });
+}
+
+function updateAfterimages(dt) {
+  for (let i = afterimages.length - 1; i >= 0; i--) {
+    afterimages[i].life -= dt;
+    if (afterimages[i].life <= 0) afterimages.splice(i, 1);
   }
 }
 
@@ -415,7 +516,7 @@ function updateParticles(dt) {
     p.life -= dt;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
-    p.vy += 620 * dt;
+    p.vy += (p.gravity ?? 620) * dt;
     if (p.life <= 0) particles.splice(i, 1);
   }
 }
@@ -423,9 +524,10 @@ function updateParticles(dt) {
 function draw() {
   const shakeX = screenShake ? (Math.random() - .5) * screenShake : 0;
   const shakeY = screenShake ? (Math.random() - .5) * screenShake * .55 : 0;
+  const parallaxX = Math.sin(stageTime * .55) * 2;
   ctx.save();
   ctx.translate(shakeX, shakeY);
-  if (assets.arena.complete) ctx.drawImage(assets.arena, -8, -5, 976, 550);
+  if (assets.arena.complete) ctx.drawImage(assets.arena, -8 + parallaxX, -5, 976, 550);
   else { ctx.fillStyle = "#16263a"; ctx.fillRect(0, 0, 960, 540); }
 
   const vignette = ctx.createLinearGradient(0, 0, 0, 540);
@@ -435,8 +537,15 @@ function draw() {
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, 960, 540);
 
+  const floorShade = ctx.createLinearGradient(0, 405, 0, 540);
+  floorShade.addColorStop(0, "rgba(4,8,15,0)");
+  floorShade.addColorStop(1, "rgba(2,4,10,.28)");
+  ctx.fillStyle = floorShade;
+  ctx.fillRect(0, 400, 960, 140);
+
   drawShadow(player);
   drawShadow(cpu);
+  afterimages.forEach(drawAfterimage);
   fighters.slice().sort((a, b) => a.x - b.x).forEach(drawFighter);
   projectiles.forEach(drawProjectile);
   particles.forEach(drawParticle);
@@ -444,10 +553,14 @@ function draw() {
 }
 
 function poseFor(f) {
+  const progress = actionProgress(f);
   if (f.action === "hit") return POSES[f.kind].hit;
-  if (f.action === "punch") return POSES[f.kind].punch;
-  if (f.action === "kick") return POSES[f.kind].kick;
+  if (f.action === "punch") {
+    return progress < .16 || progress > .84 ? POSES[f.kind].idle : POSES[f.kind].punch;
+  }
+  if (f.action === "kick") return progress < .12 ? POSES[f.kind].idle : POSES[f.kind].kick;
   if (f.action === "special") {
+    if (progress < .15) return POSES[f.kind].idle;
     if (f.kind === "blotta") return POSES.blotta.power;
     return f.projectileToggle % 2 ? POSES.sergio.meat : POSES.sergio.bottle;
   }
@@ -461,29 +574,136 @@ function drawShadow(f) {
   ctx.globalAlpha = .32 * Math.max(.3, 1 - lift / 430);
   ctx.fillStyle = "#000";
   ctx.beginPath();
-  ctx.ellipse(f.x, 452, 70 - lift * .05, 13 - lift * .012, 0, 0, Math.PI * 2);
+  ctx.ellipse(f.x, 452, 54 - lift * .04, 10 - lift * .009, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
 
-function drawFighter(f) {
-  const image = assets[f.kind];
+function fighterMotion(f) {
+  const motion = { dx: 0, dy: 0, rotation: 0, scaleX: 1, scaleY: 1 };
+  const progress = actionProgress(f);
+  const moving = f.grounded && f.action === "idle" && Math.abs(f.vx) > 18;
+
+  if (f.action === "idle") {
+    if (moving) {
+      const step = Math.sin(f.animClock * 11);
+      motion.dy -= Math.abs(step) * 3.4;
+      motion.rotation = step * .018 * f.facing;
+      motion.scaleX += Math.abs(step) * .018;
+      motion.scaleY -= Math.abs(step) * .014;
+    } else if (f.grounded) {
+      const breath = Math.sin(f.animClock * 3.7);
+      motion.dy -= 1.4 + breath * 1.15;
+      motion.scaleX -= breath * .01;
+      motion.scaleY += breath * .014;
+    }
+  }
+
+  if (!f.grounded && f.action === "idle") {
+    motion.dy -= Math.sin(f.animClock * 5) * 1.5;
+    motion.rotation -= f.facing * Math.max(-.045, Math.min(.045, f.vx / 5000));
+  }
+
+  const wave = Math.sin(Math.PI * progress);
+  if (f.action === "punch") {
+    const anticipation = progress < .22 ? -5 * (progress / .22) : 0;
+    motion.dx += f.facing * (anticipation + 15 * wave);
+    motion.rotation -= f.facing * .038 * wave;
+    motion.scaleX += .055 * wave;
+    motion.scaleY -= .025 * wave;
+  } else if (f.action === "kick") {
+    motion.dx += f.facing * 10 * wave;
+    motion.dy -= 8 * wave;
+    motion.rotation -= f.facing * .07 * wave;
+    motion.scaleX += .06 * wave;
+    motion.scaleY -= .025 * wave;
+  } else if (f.action === "special") {
+    const pulse = Math.sin(progress * Math.PI * 4);
+    motion.dy -= 2 + Math.abs(pulse) * 2.4;
+    motion.scaleX += Math.abs(pulse) * .025;
+    motion.scaleY += Math.abs(pulse) * .025;
+  } else if (f.action === "hit") {
+    motion.dx -= f.facing * 11 * wave;
+    motion.rotation -= f.facing * .095 * wave;
+    motion.scaleX -= .04 * wave;
+    motion.scaleY += .025 * wave;
+  }
+
+  if (f.landingSquash > 0) {
+    const impact = f.landingSquash / .16;
+    motion.scaleX += .09 * impact;
+    motion.scaleY -= .12 * impact;
+    motion.dy += 3 * impact;
+  }
+
+  return motion;
+}
+
+function drawMotionLines(f, motion) {
+  const progress = actionProgress(f);
+  const active = (f.action === "kick" && progress > .16 && progress < .78)
+    || (f.action === "punch" && progress > .2 && progress < .65);
+
+  if (active) {
+    ctx.save();
+    ctx.globalAlpha = .28 * Math.sin(Math.PI * progress);
+    ctx.strokeStyle = f.kind === "sergio" ? "#ffe165" : "#8fe5ff";
+    ctx.lineCap = "square";
+    for (let i = 0; i < 4; i++) {
+      const y = f.y - 55 - i * 18 + motion.dy;
+      const front = f.x + motion.dx - f.facing * (34 + i * 5);
+      ctx.lineWidth = 5 - i * .7;
+      ctx.beginPath();
+      ctx.moveTo(front, y);
+      ctx.lineTo(front - f.facing * (42 + i * 13), y + i * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  if (f.action === "special" && progress > .1 && progress < .72) {
+    ctx.save();
+    ctx.globalAlpha = .34;
+    ctx.strokeStyle = f.kind === "blotta" ? "#69dbff" : "#ffbf3d";
+    ctx.lineWidth = 3;
+    const radius = 48 + Math.sin(progress * Math.PI * 5) * 8;
+    ctx.beginPath();
+    ctx.ellipse(f.x, f.y - 82, radius, radius * .68, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawSpriteFrame(frame, alpha = 1, ghost = false) {
+  const image = assets[frame.kind];
   if (!image.complete) return;
-  const pose = poseFor(f);
+  const pose = frame.pose;
   const cell = 270;
   const sx = (pose % 3) * cell;
   const sy = Math.floor(pose / 3) * cell;
-  const size = f.kind === "sergio" ? 304 : 296;
-  const desiredFace = f.facing;
-  const needsFlip = desiredFace !== stats[f.kind].defaultFace;
-  const bob = f.action === "idle" && f.grounded ? Math.sin(performance.now() / 180) * 2 : 0;
+  const size = frame.kind === "sergio" ? 246 : 238;
+  const needsFlip = frame.facing !== stats[frame.kind].defaultFace;
+  const motion = frame.motion;
 
   ctx.save();
-  ctx.translate(f.x, f.y + bob);
-  if (needsFlip) ctx.scale(-1, 1);
-  if (f.flash > 0 && Math.floor(f.flash * 40) % 2 === 0) ctx.globalAlpha = .42;
+  ctx.translate(frame.x + motion.dx, frame.y + motion.dy);
+  ctx.rotate(motion.rotation);
+  ctx.scale((needsFlip ? -1 : 1) * motion.scaleX, motion.scaleY);
+  ctx.globalAlpha = alpha;
+  if (ghost) ctx.globalCompositeOperation = "screen";
   ctx.drawImage(image, sx, sy, cell, cell, -size / 2, -size * .94, size, size);
   ctx.restore();
+}
+
+function drawAfterimage(ghost) {
+  drawSpriteFrame(ghost, (ghost.life / ghost.maxLife) * .16, true);
+}
+
+function drawFighter(f) {
+  const motion = fighterMotion(f);
+  drawMotionLines(f, motion);
+  const flashing = f.flash > 0 && Math.floor(f.flash * 40) % 2 === 0;
+  drawSpriteFrame({ kind: f.kind, pose: poseFor(f), x: f.x, y: f.y, facing: f.facing, motion }, flashing ? .42 : 1);
 }
 
 function drawProjectile(p) {
@@ -529,12 +749,22 @@ function updateHud() {
   ui.timer.textContent = String(roundTime).padStart(2, "0");
 }
 
+function setPauseUI(paused) {
+  ui.pauseBtn.textContent = paused ? "SEGUIR" : "PAUSA";
+  ui.pauseBtn.classList.toggle("resume", paused);
+  ui.pauseBtn.setAttribute("aria-label", paused ? "Reanudar juego" : "Pausar juego");
+  ui.gameScreen.classList.toggle("paused", paused);
+}
+
 function togglePause() {
   if (state === "playing") {
     state = "paused";
-    announce("PAUSA", 999999);
+    held.left = held.right = false;
+    setPauseUI(true);
+    announce("PAUSA");
   } else if (state === "paused") {
     state = "playing";
+    setPauseUI(false);
     ui.announcement.classList.remove("show");
   }
 }
@@ -542,6 +772,10 @@ function togglePause() {
 function loop(now) {
   const dt = Math.min(.032, (now - lastTime) / 1000);
   lastTime = now;
+  if (state === "intro") {
+    stageTime += dt;
+    fighters.forEach(f => { f.animClock += dt; });
+  }
   update(dt);
   if (["intro", "playing", "paused", "finished"].includes(state)) draw();
   requestAnimationFrame(loop);
