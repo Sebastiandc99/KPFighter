@@ -34,6 +34,7 @@ La Tunki lanza flores con `L`. Con `H` salta hacia el rival y cae con un aplasta
 - **Sergio:** panzazo, patada voladora y proyectiles de asado o fernet.
 - **Blotta:** golpes de karate, patada voladora, energía de karate y teletransporte con humo.
 - **La Tunki:** proyectiles de flores, patadas y salto aplastante. Conserva la ropa negra y rosa y la panza prominente de su diseño.
+- **Marechal:** alto y delgado, con sombrero de paja y atuendo blanco y azul. Camina, salta, golpea, patea, se agacha y se cubre con los controles básicos. Lanza rayos desde las manos con `L` o **PODER** en celular (35 de energía).
 
 El rival se elige entre los demás luchadores y es controlado por la máquina. Cuando Blotta participa, antes del combate lanza su desafío: “Te voy a echar”.
 

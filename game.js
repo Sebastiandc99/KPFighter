@@ -38,21 +38,25 @@ const assets = {
   sergio: loadImage("assets/sergio-attack-v4.png"),
   blotta: loadImage("assets/blotta-atlas-v2-clean.png"),
   tunki: loadImage("assets/tunki-attack-v1.png"),
+  marechal: loadImage("assets/marechal-attack-v1.png"),
   sergioMotion: loadImage("assets/sergio-motion-v4.png"),
   blottaMotion: loadImage("assets/blotta-motion-v3.png"),
-  tunkiMotion: loadImage("assets/tunki-motion-v1.png")
+  tunkiMotion: loadImage("assets/tunki-motion-v1.png"),
+  marechalMotion: loadImage("assets/marechal-motion-v1.png")
 };
 
 const POSES = {
   sergio: { idle: 0, punch: 1, kick: 2, hit: 3, meat: 4, bottle: 5 },
   blotta: { idle: 0, punch: 1, kick: 2, sweep: 3, hit: 4, power: 5 },
-  tunki: { idle: 0, punch: 1, kick: 2, hit: 3, power: 4, slam: 5 }
+  tunki: { idle: 0, punch: 1, kick: 2, hit: 3, power: 4, slam: 5 },
+  marechal: { idle: 0, punch: 1, kick: 2, hit: 3, power: 4, sweep: 5 }
 };
 
 const stats = {
   sergio: { name: "SERGIO", speed: 260, jump: 595, defaultFace: 1, size: 210, height: 184, width: 32, description: "PANZAZO · ASADO · FERNET", ability: null },
   blotta: { name: "BLOTTA", speed: 278, jump: 620, defaultFace: -1, size: 214, height: 180, width: 25, description: "KARATE · ENERGÍA · HUMO", ability: "teleport" },
-  tunki: { name: "LA TUNKI", speed: 246, jump: 605, defaultFace: 1, size: 202, height: 174, width: 32, description: "FLORES · SALTO APLASTANTE", ability: "slam" }
+  tunki: { name: "LA TUNKI", speed: 246, jump: 605, defaultFace: 1, size: 202, height: 174, width: 32, description: "FLORES · SALTO APLASTANTE", ability: "slam" },
+  marechal: { name: "MARECHAL", speed: 270, jump: 620, defaultFace: 1, size: 242, height: 202, width: 23, description: "ARTES MARCIALES · RAYOS", ability: null }
 };
 
 const roster = Object.keys(stats);
@@ -611,7 +615,7 @@ function attack(f, type) {
     f.vx = f.vy = 0;
   } else if (type === "special") {
     f.specialSpawned = false;
-    f.specialStyle = f.kind === "sergio" ? (f.projectileToggle++ % 2 ? "bottle" : "meat") : f.kind === "tunki" ? "flowers" : "ki";
+    f.specialStyle = f.kind === "sergio" ? (f.projectileToggle++ % 2 ? "bottle" : "meat") : f.kind === "tunki" ? "flowers" : f.kind === "marechal" ? "lightning" : "ki";
     f.vx = 0;
   } else if (type === "kick" && !low && f.grounded) {
     f.vy = -260;
@@ -621,17 +625,18 @@ function attack(f, type) {
   } else if (f.grounded) {
     f.vx = f.facing * (low ? 35 : f.kind === "sergio" ? 180 : 105);
   }
-  sfx(type);
+  sfx(f.kind === "marechal" && type === "special" ? "lightning" : type);
   return true;
 }
 
 function spawnProjectile(owner, style) {
   const config = style === "ki" ? { speed: 470, damage: 13, radius: 16 } :
+    style === "lightning" ? { speed: 560, damage: 13, radius: 15 } :
     style === "flowers" ? { speed: 405, damage: 14, radius: 20 } :
     style === "bottle" ? { speed: 425, damage: 12, radius: 16 } : { speed: 395, damage: 10, radius: 19 };
   projectiles.push({
     owner, style, x: owner.x + owner.facing * 58 * FIGHTER_SCALE, y: owner.y - 143 * FIGHTER_SCALE,
-    vx: owner.facing * config.speed, vy: style === "ki" ? 0 : -42,
+    vx: owner.facing * config.speed, vy: style === "ki" || style === "lightning" ? 0 : -42,
     damage: config.damage, radius: config.radius * FIGHTER_SCALE, life: 2.5, spin: 0, trailTime: 0
   });
 }
@@ -642,7 +647,7 @@ function updateProjectiles(dt) {
     p.life -= dt;
     p.x += p.vx * dt;
     p.spin += dt * 8;
-    if (p.style !== "ki") { p.vy += 82 * dt; p.y += p.vy * dt; }
+    if (p.style !== "ki" && p.style !== "lightning") { p.vy += 82 * dt; p.y += p.vy * dt; }
     if (p.style === "flowers") {
       p.trailTime -= dt;
       if (p.trailTime <= 0) { burst(p.x, p.y, "#ff81c5", 1); p.trailTime = .06; }
@@ -653,6 +658,7 @@ function updateProjectiles(dt) {
       hit(target, p.damage, Math.sign(p.vx) * 180, 0, p.owner,
         { direction: Math.sign(p.vx), sourceX: p.x - Math.sign(p.vx) * p.radius, projectile: true, low: false, x: p.x, y: p.y });
       if (p.style === "flowers") burst(p.x, p.y, "#ff72bb", 15);
+      if (p.style === "lightning") burst(p.x, p.y, "#a8edff", 14);
       projectiles.splice(i, 1);
       if (state !== "playing") return;
     } else if (p.life <= 0 || p.x < -50 || p.x > 1010 || p.y > FLOOR) projectiles.splice(i, 1);
@@ -830,6 +836,7 @@ function poseFor(f) {
   if (f.action === "teleport") return 11;
   if (f.action === "slam") return f.slamLanded ? 11 : f.slamDiving ? POSES.tunki.slam : f.slamLaunched ? 10 : 8;
   if (f.guarding || f.action === "block") return 9;
+  if (f.kind === "marechal" && f.lowAttack && f.action === "kick") return POSES.marechal.sweep;
   if (f.lowAttack) return f.kind === "blotta" && f.action === "kick" ? POSES.blotta.sweep : 8;
   if (f.action === "punch") {
     return progress < .16 || progress > .86 ? POSES[f.kind].idle : f.kind === "sergio" ? 11 : POSES[f.kind].punch;
@@ -839,10 +846,12 @@ function poseFor(f) {
     if (progress < .15) return POSES[f.kind].idle;
     if (f.kind === "blotta") return POSES.blotta.power;
     if (f.kind === "tunki") return POSES.tunki.power;
+    if (f.kind === "marechal") return POSES.marechal.power;
     return f.projectileToggle % 2 ? POSES.sergio.meat : POSES.sergio.bottle;
   }
   if (f.crouching) return 8;
   if (!f.grounded) return 10;
+  if (f.kind === "marechal" && f.landingSquash > .08 && f.action === "idle") return 11;
   if (Math.abs(f.vx) > 22) return [6, 0, 7, 0][Math.floor(f.walkPhase) % 4];
   return POSES[f.kind].idle;
 }
@@ -958,12 +967,30 @@ function drawMotionLines(f, motion) {
   if (f.action === "special" && progress > .1 && progress < .72) {
     ctx.save();
     ctx.globalAlpha = .34;
-    ctx.strokeStyle = f.kind === "blotta" ? "#69dbff" : f.kind === "tunki" ? "#ff88ce" : "#ffbf3d";
+    ctx.strokeStyle = f.kind === "blotta" || f.kind === "marechal" ? "#69dbff" : f.kind === "tunki" ? "#ff88ce" : "#ffbf3d";
     ctx.lineWidth = 3;
     const radius = 48 + Math.sin(progress * Math.PI * 5) * 8;
     ctx.beginPath();
     ctx.ellipse(f.x, f.y - 82 * FIGHTER_SCALE, radius * FIGHTER_SCALE, radius * .68 * FIGHTER_SCALE, 0, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.restore();
+  }
+  if (f.kind === "marechal" && f.action === "special" && progress > .12 && progress < .78) {
+    ctx.save();
+    ctx.translate(f.x + f.facing * 51 * FIGHTER_SCALE, f.y - 143 * FIGHTER_SCALE);
+    ctx.scale(f.facing * FIGHTER_SCALE, FIGHTER_SCALE);
+    ctx.strokeStyle = "#c5f4ff";
+    ctx.shadowColor = "#219cff";
+    ctx.shadowBlur = 9;
+    ctx.lineWidth = 2;
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(-17, side * 12);
+      ctx.lineTo(-6, side * (20 + Math.sin(stageTime * 35) * 4));
+      ctx.lineTo(0, side * 5);
+      ctx.lineTo(10, side * 15);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 }
@@ -1064,8 +1091,36 @@ function drawProjectile(p) {
   ctx.save();
   ctx.translate(p.x, p.y);
   ctx.scale(FIGHTER_SCALE, FIGHTER_SCALE);
-  ctx.rotate(p.style === "ki" ? 0 : p.spin * Math.sign(p.vx));
-  if (p.style === "ki") {
+  ctx.rotate(p.style === "ki" || p.style === "lightning" ? 0 : p.spin * Math.sign(p.vx));
+  if (p.style === "lightning") {
+    ctx.scale(Math.sign(p.vx) || 1, 1);
+    ctx.lineJoin = "miter";
+    ctx.shadowColor = "#139bff";
+    ctx.shadowBlur = 14 * drawingScale;
+    const flicker = Math.sin(stageTime * 55) * 4;
+    for (const [width, color] of [[9, "#1584f0"], [5, "#76dfff"], [2, "#ffffff"]]) {
+      ctx.lineWidth = width;
+      ctx.strokeStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(-67, -5);
+      ctx.lineTo(-47, 8 + flicker);
+      ctx.lineTo(-37, -9);
+      ctx.lineTo(-21, 6 - flicker);
+      ctx.lineTo(-9, -6);
+      ctx.lineTo(15, 0);
+      ctx.stroke();
+    }
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#bef4ff";
+    ctx.beginPath();
+    ctx.moveTo(-38, -8);
+    ctx.lineTo(-44, -20);
+    ctx.lineTo(-54, -16);
+    ctx.moveTo(-19, 5);
+    ctx.lineTo(-31, 20);
+    ctx.lineTo(-43, 15);
+    ctx.stroke();
+  } else if (p.style === "ki") {
     const glow = ctx.createRadialGradient(0, 0, 3, 0, 0, 31);
     glow.addColorStop(0, "#ffffff");
     glow.addColorStop(.3, "#75e4ff");
@@ -1207,6 +1262,7 @@ function sfx(name) {
     kick: () => tone(130, .12, "sawtooth", .045, -80),
     hit: () => { tone(62, .13, "square", .07, -22); tone(145, .05, "sawtooth", .035, -80); },
     special: () => { tone(220, .23, "sawtooth", .045, 380); setTimeout(() => tone(540, .12, "square", .03, -100), 80); },
+    lightning: () => { tone(960, .16, "sawtooth", .038, -720); tone(140, .2, "square", .026, 510); },
     teleport: () => { tone(400, .23, "sine", .04, -330); tone(95, .36, "triangle", .03, 620); },
     slam: () => { tone(88, .22, "triangle", .075, -60); tone(48, .14, "sawtooth", .045, -20); },
     block: () => tone(720, .07, "triangle", .05, -370),

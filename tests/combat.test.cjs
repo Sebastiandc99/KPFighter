@@ -27,8 +27,8 @@ function game() {
     }
     return nodes.get(id);
   }
-  const picks = ["sergio", "blotta", "tunki"].map(kind => node("pick-" + kind, { pick: kind }));
-  const portraits = ["sergio", "blotta", "tunki"].map(kind => node("portrait-" + kind, { portrait: kind }));
+  const picks = ["sergio", "blotta", "tunki", "marechal"].map(kind => node("pick-" + kind, { pick: kind }));
+  const portraits = ["sergio", "blotta", "tunki", "marechal"].map(kind => node("portrait-" + kind, { portrait: kind }));
   const holds = ["left", "right", "down", "guard"].map(hold => node("hold-" + hold, { hold }));
   const taps = ["jump", "punch", "kick", "special", "ability"].map(tap => node("tap-" + tap, { tap }));
   const win = node("window");
@@ -210,8 +210,8 @@ test("an input buffered near recovery executes and damage stops at round end", (
 });
 
 test("all character matchups finish simulated fights with AI and rendering enabled", () => {
-  for (const kind of ["sergio", "blotta", "tunki"]) {
-   for (const rival of ["sergio", "blotta", "tunki"].filter(other => other !== kind)) {
+  for (const kind of ["sergio", "blotta", "tunki", "marechal"]) {
+   for (const rival of ["sergio", "blotta", "tunki", "marechal"].filter(other => other !== kind)) {
     const g = game();
     g.run('startGame("' + kind + '"); state = "playing"; aiEnabled = true;');
     g.run('cpu.kind = "' + rival + '";');
@@ -327,4 +327,60 @@ test("high-density rendering keeps game positions and Blotta's speech aligned", 
   assert.equal(g.run("player.x"), 235);
   assert.ok(Math.abs(parseFloat(g.nodes.get("speechBubble").style.left) - 235 / 960 * 100) < .001);
   g.run("draw()");
+});
+
+test("Marechal can be selected with keyboard or touch and uses basic controls", () => {
+  const g = game();
+  g.run('openSelection(); chooseFighter("tunki", false);');
+  g.key("ArrowRight");
+  assert.equal(g.run("playerChoice"), "marechal");
+  assert.equal(g.nodes.get("selectionName").textContent, "MARECHAL");
+  g.key("Enter");
+  assert.equal(g.run("player.kind"), "marechal");
+  assert.notEqual(g.run("cpu.kind"), "marechal");
+  assert.equal(g.nodes.get("abilityBtn").hidden, true);
+  g.run('state = "playing";');
+  g.key("KeyW");
+  assert.equal(g.run("poseFor(player)"), 10);
+  g.tick(.85);
+  assert.equal(g.run("cpu.health"), 100);
+  g.key("KeyS");
+  assert.equal(g.run("poseFor(player)"), 8);
+  g.key("KeyI");
+  assert.equal(g.run("player.guarding"), true);
+  g.run('openSelection(); chooseFighter("sergio", false);');
+  g.nodes.get("pick-marechal").listeners.click();
+  g.nodes.get("confirmBtn").listeners.click();
+  assert.equal(g.run("player.kind"), "marechal");
+});
+
+test("Marechal's hand lightning travels straight and spends power once on PC and touch", () => {
+  for (const touch of [false, true]) {
+    const g = game();
+    g.run('startGame("marechal"); state = "playing"; player.x = 300; cpu.x = 580;');
+    if (touch) g.taps[3].listeners.pointerdown({pointerId: 8, preventDefault() {}});
+    else g.key("KeyL");
+    assert.equal(g.run("player.power"), 5);
+    g.tick(.21);
+    assert.equal(g.run("projectiles[0].style"), "lightning");
+    assert.equal(g.run("poseFor(player)"), 4);
+    const y = g.run("projectiles[0].y");
+    g.tick(.1);
+    assert.equal(g.run("projectiles[0].y"), y);
+    g.tick(.5);
+    assert.equal(g.run("cpu.health"), 87);
+    assert.equal(g.run("projectiles.length"), 0);
+    assert.equal(g.run('attack(player, "special")'), false);
+  }
+});
+
+test("Marechal's lightning can be blocked or ducked like other high projectiles", () => {
+  for (const defense of ["guard", "crouch"]) {
+    const g = game();
+    g.run('startGame("marechal"); state = "playing"; player.x = 300; cpu.x = 520; cpu.facing = -1;');
+    g.run(defense === "guard" ? 'cpu.guarding = true;' : 'cpu.crouching = true;');
+    g.key("KeyL");
+    g.tick(.8);
+    assert.equal(g.run("cpu.health"), defense === "guard" ? 99 : 100);
+  }
 });
