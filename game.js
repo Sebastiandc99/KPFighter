@@ -95,11 +95,11 @@ const MOVES = {
 
 const COMBAT_AUDIO = {
   // Skip measured leading silence so even a close-range jab is audible.
-  general: { src: "assets/golpe-general.mp3", volume: .75, start: .18, end: .59 },
-  belly: { src: "assets/panzazo-sergio.mp3", volume: .8, start: .035 },
-  lightning: { src: "assets/poder-rayo.mp3", volume: .65, start: .035, end: 1.69 },
-  meat: { src: "assets/poder-sergio-carne.mp3", volume: .8, start: 0 },
-  flowers: { src: "assets/flores-tunki.mp3", volume: .8, start: .025, end: 2.42 }
+  general: { src: "assets/golpe-general.mp3", volume: .32, start: .18, end: .59 },
+  belly: { src: "assets/panzazo-sergio.mp3", volume: .36, start: .035 },
+  lightning: { src: "assets/poder-rayo.mp3", volume: 1, start: .035, end: 1.69 },
+  meat: { src: "assets/poder-sergio-carne.mp3", volume: 1, start: 0 },
+  flowers: { src: "assets/flores-tunki.mp3", volume: 1, start: .025, end: 2.42 }
 };
 // Each attack/projectile owns its own voice; removing one never stops another.
 const combatSounds = new Set();
@@ -1980,13 +1980,13 @@ function loadMusic(track) {
 function syncMusic() {
   const allowed = musicTrack?.usage === "selection" ? ["select", "stage"] : ["intro", "playing", "roundOver"];
   if (!allowed.includes(state) || muted || !audioCtx || audioCtx.state !== "running" || !musicTrack?.buffer) return;
-  if (musicGain) musicGain.gain.value = state === "intro" ? .10 : musicTrack.usage === "selection" ? .28 : .20;
+  if (musicGain) musicGain.gain.value = state === "intro" ? .22 : musicTrack.usage === "selection" ? .55 : .48;
   if (musicSource) return;
   musicSource = audioCtx.createBufferSource();
   musicGain = audioCtx.createGain();
   musicSource.buffer = musicTrack.buffer;
   musicSource.loop = true;
-  musicGain.gain.value = state === "intro" ? .10 : musicTrack.usage === "selection" ? .28 : .20;
+  musicGain.gain.value = state === "intro" ? .22 : musicTrack.usage === "selection" ? .55 : .48;
   musicSource.connect(musicGain).connect(audioCtx.destination);
   musicSource.start(0, musicElapsed % musicTrack.buffer.duration);
   musicStartedAt = audioCtx.currentTime || 0;
@@ -2064,14 +2064,14 @@ function sfx(name) {
     confirm: () => { tone(330, .08, "square", .035); later(() => tone(660, .14, "square", .035), 70); },
     fight: () => { tone(260, .12, "sawtooth", .05, 380); later(() => tone(520, .18), 100); },
     jump: () => tone(170, .11, "square", .025, 180),
-    punch: () => tone(95, .08, "sawtooth", .04, -40),
-    kick: () => tone(130, .12, "sawtooth", .045, -80),
-    hit: () => { tone(62, .13, "square", .07, -22); tone(145, .05, "sawtooth", .035, -80); },
-    special: () => { tone(220, .23, "sawtooth", .045, 380); later(() => tone(540, .12, "square", .03, -100), 80); },
+    punch: () => tone(95, .08, "sawtooth", .018, -40),
+    kick: () => tone(130, .12, "sawtooth", .02, -80),
+    hit: () => { tone(62, .13, "square", .03, -22); tone(145, .05, "sawtooth", .015, -80); },
+    special: () => { tone(220, .23, "sawtooth", .065, 380); later(() => tone(540, .12, "square", .045, -100), 80); },
     lightning: () => { tone(960, .16, "sawtooth", .038, -720); tone(140, .2, "square", .026, 510); },
-    teleport: () => { tone(400, .23, "sine", .04, -330); tone(95, .36, "triangle", .03, 620); },
+    teleport: () => { tone(400, .23, "sine", .06, -330); tone(95, .36, "triangle", .045, 620); },
     slam: () => { tone(88, .22, "triangle", .075, -60); tone(48, .14, "sawtooth", .045, -20); },
-    block: () => tone(720, .07, "triangle", .05, -370),
+    block: () => tone(720, .07, "triangle", .025, -370),
     empty: () => tone(70, .08, "square", .025),
     win: () => [0, 130, 260].forEach((d, i) => later(() => tone([330, 440, 660][i], .24), d)),
     lose: () => { tone(220, .25, "sawtooth", .04, -100); later(() => tone(105, .45, "square", .04, -55), 180); }
