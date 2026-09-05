@@ -14,7 +14,7 @@ La versión publicada está disponible en:
 - `W` / flecha arriba: salto sin atacar
 - `S` / flecha abajo (mantener): agacharse
 - `I` / `Shift` (mantener): cubrirse
-- `J`: golpe / panzazo
+- `J`: golpe / panzazo; manteniendo `S` o flecha abajo, gancho ascendente
 - `K`: patada voladora; agachado, patada baja
 - `L`: proyectil especial (35 de energía)
 - `H`: teletransporte de Blotta o salto aplastante de La Tunki (30 de energía)
@@ -22,6 +22,8 @@ La versión publicada está disponible en:
 - `Enter`: avanzar desde la portada y confirmar la selección
 
 En teléfonos y tablets aparecen controles táctiles con soporte para varios dedos y un botón de pausa. El juego se presenta en horizontal: al iniciar solicita pantalla completa y orientación horizontal cuando el navegador lo permite. Si el teléfono mantiene la orientación vertical, el tablero gira para aprovechar el lado largo de la pantalla. Al girar el dispositivo, el diseño se adapta automáticamente.
+
+Los cuatro luchadores realizan un **gancho ascendente** al mantener agacharse y pulsar puño (`S` + `J`, o **AGACHARSE** + **GOLPE** en celular). Tiene postura propia, puede alcanzar a un rival en el aire y lo levanta al conectar. Se puede bloquear de frente y no consume energía.
 
 Mantener agacharse y cubrirse permite defender los ataques bajos. La guardia protege de frente: los golpes normales bloqueados no hacen daño y los proyectiles bloqueados quitan 1 de vida. Agacharse también permite esquivar ataques altos.
 
@@ -57,3 +59,9 @@ El impulso del salto normal aumentó un 25%, logrando aproximadamente un 55% má
 La escala de los luchadores se redujo un 10%, con zonas de contacto y efectos ajustados a su tamaño. El dibujado se adapta a la densidad de pantalla, conserva el arte original y añade iluminación suave y sombras de contacto. Las barras de vida llegan a los bordes del área de juego y tienen mayor grosor, también en el diseño horizontal de celular; el reloj queda encima del encuentro entre ambas.
 
 Pruebas de lógica y entrada: `node --test tests/combat.test.cjs`.
+
+## Sonidos de combate
+
+Los golpes de puño, ganchos y patadas usan **Golpe general**. El panzazo de Sergio usa **Panzazo Sergio**, aunque no alcance al rival. Los rayos de Marechal usan **Poder rayo** desde que salen de las manos; el asado de Sergio usa **Poder sergio carne** desde que se lanza. Cada ataque controla su audio: se corta al conectar, bloquearse, terminar el movimiento o tocar el borde visible. Los proyectiles mantienen el sonido durante todo su recorrido, aunque el luchador ya haya terminado la animación de lanzamiento.
+
+Los audios respetan pausa, cambio de pestaña, silencio, interrupciones y fin de round. Las voces de ataques simultáneos son independientes. Se omite el silencio inicial medido de los archivos para que los golpes cortos se escuchen a tiempo.

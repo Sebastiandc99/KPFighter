@@ -44,6 +44,7 @@ const stageRoster = Object.keys(stages);
 const stageImages = Object.fromEntries(stageRoster.map(key => [key, loadImage(stages[key].src)]));
 
 const assets = {
+  uppercuts: loadImage("assets/uppercuts-v1.png"),
   arena: loadImage("assets/arena.jpg"),
   sergio: loadImage("assets/sergio-attack-v4.png"),
   blotta: loadImage("assets/blotta-atlas-v2-clean.png"),
@@ -83,12 +84,22 @@ const ROUND_AUDIO = {
 const MOVES = {
   punch: { startup: .085, active: .095, recovery: .18, reach: 77, damage: 8, knock: 160 },
   kick: { startup: .12, active: .16, recovery: .23, reach: 106, damage: 11, knock: 235 },
-  lowPunch: { startup: .08, active: .09, recovery: .17, reach: 68, damage: 6, knock: 110 },
+  uppercut: { startup: .105, active: .17, recovery: .26, reach: 76, damage: 12, knock: 145, lift: -420 },
   lowKick: { startup: .13, active: .14, recovery: .22, reach: 102, damage: 9, knock: 210 },
   special: { startup: .19, active: .04, recovery: .29 },
   teleport: { startup: .16, active: .28, recovery: .23 },
   slam: { startup: .12, active: 1.55, recovery: .33, damage: 18, knock: 290 }
 };
+
+const COMBAT_AUDIO = {
+  // Skip measured leading silence so even a close-range jab is audible.
+  general: { src: "assets/golpe-general.mp3", volume: .75, start: .18, end: .59 },
+  belly: { src: "assets/panzazo-sergio.mp3", volume: .8, start: .035 },
+  lightning: { src: "assets/poder-rayo.mp3", volume: .65, start: .035, end: 1.69 },
+  meat: { src: "assets/poder-sergio-carne.mp3", volume: .8, start: 0 }
+};
+// Each attack/projectile owns its own voice; removing one never stops another.
+const combatSounds = new Set();
 
 let state = "title";
 let playerChoice = "sergio";
@@ -179,7 +190,7 @@ function makeFighter(kind, x, isPlayer) {
     landingSquash: 0,
     attackLanded: false, invuln: 0, specialCooldown: 0,
     projectileToggle: 0, facing: x < 480 ? 1 : -1, flash: 0,
-    moveSpec: null, lowAttack: false, airAttack: false, moveIntent: 0,
+    moveSpec: null, lowAttack: false, airAttack: false, moveIntent: 0, attackSound: null,
     walkPhase: 0, combo: 0, comboTime: 0, guardFlash: 0
   };
   const motion = fighterMotion(f);
@@ -211,6 +222,7 @@ function chooseFighter(kind, playSound = true) {
 
 function openSelection() {
   stopRoundVoice();
+  stopAllCombatSounds();
   state = "select";
   clearHeld();
   ui.resultPanel.hidden = true;
@@ -255,6 +267,7 @@ function startGame(choice, opponentKind = null) {
 
 function startRound() {
   stopRoundVoice();
+  stopAllCombatSounds();
   roundVoiceStarted = false;
   player = makeFighter(match.playerKind, 235, true);
   cpu = makeFighter(match.cpuKind, 725, false);
@@ -367,9 +380,12 @@ function update(dt) {
     return;
   }
   if (hitStop > 0) {
+    suspendCombatSounds();
     hitStop = Math.max(0, hitStop - dt);
     return;
   }
+
+  advanceCombatSounds(dt);
 
   roundTime = Math.max(0, roundTime - dt);
   if (roundTime <= 0) {
@@ -397,6 +413,7 @@ function update(dt) {
   resolvingContacts = true;
   contacts.forEach(contact => {
     contact.attacker.attackLanded = true;
+    stopFighterSound(contact.attacker);
     hit(contact.target, contact.damage, contact.direction * contact.knock, contact.lift, contact.attacker, contact);
   });
   resolvingContacts = false;
@@ -434,7 +451,13 @@ function updateAI(dt) {
   aiClock = .14 + Math.random() * .18;
   if (cpu.guarding || cpu.crouching) { cpu.moveIntent = 0; return; }
   const incoming = projectiles.some(p => p.owner === player && Math.abs(p.x - cpu.x) < 190 && (cpu.x - p.x) * p.vx > 0);
-  const threatened = distance < 140 && ["punch", "kick"].includes(player.action);
+  const threatened = distance < 140 && ["punch", "uppercut", "kick"].includes(player.action);
+  if (!player.grounded && cpu.grounded && distance < 105 && player.y > FLOOR - 185 && Math.random() < .35) {
+    cpu.crouchTime = .45;
+    setStance(cpu, true, false);
+    attack(cpu, "punch");
+    return;
+  }
   if ((incoming || threatened) && cpu.grounded && Math.random() < .55) {
     cpu.guardTime = .26 + Math.random() * .22;
     cpu.crouchTime = player.lowAttack ? cpu.guardTime : 0;
@@ -557,6 +580,7 @@ function updateFighter(f, dt) {
       }
     }
     if (f.actionTime === 0) {
+      stopFighterSound(f);
       f.action = "idle";
       f.actionDuration = 0;
       f.moveSpec = null;
@@ -572,14 +596,14 @@ function updateFighter(f, dt) {
       if (queued !== "jump" || f.grounded) {
         f.queuedAction = null;
         f.queueTime = 0;
-        if (canCancel) { f.action = "idle"; f.actionTime = 0; }
+        if (canCancel) { stopFighterSound(f); f.action = "idle"; f.actionTime = 0; }
         if (queued === "jump") jump(f);
         else attack(f, queued);
       }
     }
   }
   const progress = actionProgress(f);
-  if ((f.action === "slam" && f.slamDiving && !f.slamLanded) || (f.action === "kick" && progress > .2 && progress < .72) || (f.action === "special" && progress > .3 && progress < .65)) {
+  if ((f.action === "slam" && f.slamDiving && !f.slamLanded) || (f.action === "uppercut" && progress > .18 && progress < .6) || (f.action === "kick" && progress > .2 && progress < .72) || (f.action === "special" && progress > .3 && progress < .65)) {
     f.trailClock -= dt;
     if (f.trailClock <= 0) { addAfterimage(f); f.trailClock = .06; }
   } else f.trailClock = 0;
@@ -587,7 +611,8 @@ function updateFighter(f, dt) {
 
 function hurtBox(f) {
   const low = f.crouching || f.lowAttack;
-  const height = (low ? 124 : stats[f.kind].height) * FIGHTER_SCALE;
+  const rise = f.action === "uppercut" ? uppercutRise(f) : 0;
+  const height = (f.action === "uppercut" ? lerp(124, stats[f.kind].height, rise) : low ? 124 : stats[f.kind].height) * FIGHTER_SCALE;
   const width = stats[f.kind].width * FIGHTER_SCALE;
   return { left: f.x - width, right: f.x + width, top: f.y - height, bottom: f.y - 4 };
 }
@@ -604,19 +629,20 @@ function isVanished(f) {
 
 function attackContact(f, target) {
   if (f.action === "slam") return slamContact(f, target);
-  if (f.attackLanded || !["punch", "kick"].includes(f.action) || isVanished(target) || target.invuln > 0) return null;
+  if (f.attackLanded || !["punch", "uppercut", "kick"].includes(f.action) || isVanished(target) || target.invuln > 0) return null;
   const spec = f.moveSpec;
   const elapsed = f.actionDuration - f.actionTime;
   if (elapsed < spec.startup || elapsed > spec.startup + spec.active) return null;
   const front = f.x + f.facing * spec.reach * FIGHTER_SCALE;
   const low = f.lowAttack;
-  const centerY = f.y - (low ? (f.action === "kick" ? 34 : 67) : (f.action === "punch" ? (f.kind === "sergio" ? 88 : 145) : 120)) * FIGHTER_SCALE;
-  const thickness = (f.action === "punch" ? 14 : 20) * FIGHTER_SCALE;
+  const rising = f.action === "uppercut";
+  const centerY = f.y - (rising ? lerp(93, 218, smoothstep((elapsed - spec.startup) / spec.active)) : low ? 34 : (f.action === "punch" ? (f.kind === "sergio" ? 88 : 145) : 120)) * FIGHTER_SCALE;
+  const thickness = (rising ? 25 : f.action === "punch" ? 14 : 20) * FIGHTER_SCALE;
   const box = { left: Math.min(f.x, front), right: Math.max(f.x, front), top: centerY - thickness, bottom: centerY + thickness };
   if (!overlaps(box, hurtBox(target))) return null;
   return {
     attacker: f, target, damage: spec.damage + (f.kind === "sergio" && f.action === "punch" ? 2 : 0),
-    knock: spec.knock, lift: f.airAttack ? -120 : 0, direction: f.facing, low,
+    knock: spec.knock, lift: rising ? spec.lift : f.airAttack ? -120 : 0, direction: f.facing, low,
     sourceX: f.x, projectile: false, x: (front + target.x) / 2, y: centerY
   };
 }
@@ -684,14 +710,16 @@ function attack(f, type) {
     return false;
   }
   const low = f.grounded && (f.isPlayer ? held.down : f.crouching) && !cost;
-  f.moveSpec = MOVES[low ? (type === "kick" ? "lowKick" : "lowPunch") : type];
+  if (low && type === "punch") type = "uppercut";
+  stopFighterSound(f);
+  f.moveSpec = MOVES[low && type === "kick" ? "lowKick" : type];
   f.action = type;
   f.actionDuration = f.moveSpec.startup + f.moveSpec.active + f.moveSpec.recovery;
   f.actionTime = f.actionDuration;
   f.attackLanded = false;
-  f.lowAttack = low;
+  f.lowAttack = low && type !== "uppercut";
   f.airAttack = !f.grounded;
-  f.crouching = low;
+  f.crouching = f.lowAttack;
   f.guarding = false;
   f.queuedAction = null;
   f.queueTime = 0;
@@ -718,7 +746,9 @@ function attack(f, type) {
   } else if (f.grounded) {
     f.vx = f.facing * (low ? 35 : f.kind === "sergio" ? 180 : 105);
   }
-  sfx(f.kind === "marechal" && type === "special" ? "lightning" : type);
+  if (["punch", "uppercut", "kick"].includes(type)) {
+    f.attackSound = startCombatSound(f.kind === "sergio" && type === "punch" ? "belly" : "general");
+  } else if (type !== "special" || !["lightning", "meat"].includes(f.specialStyle)) sfx(type);
   return true;
 }
 
@@ -732,6 +762,7 @@ function spawnProjectile(owner, style) {
   addEffect("ring", x, y, powerColor(owner.kind), 36, .22);
   burst(x, y, powerColor(owner.kind), 5);
   projectiles.push({
+    sound: ["lightning", "meat"].includes(style) ? startCombatSound(style) : null,
     owner, style, x, y, prevX: x, prevY: y, prevSpin: 0,
     vx: owner.facing * config.speed, vy: style === "ki" || style === "lightning" ? 0 : -42,
     damage: config.damage, radius: config.radius * FIGHTER_SCALE, life: 2.5, spin: 0, trailTime: 0, trail: []
@@ -754,15 +785,22 @@ function updateProjectiles(dt) {
       if (p.style === "lightning") burst(p.x, p.y, "#91eaff", 1);
     }
     const target = p.owner === player ? cpu : player;
+    // End as soon as the leading edge reaches the visible screen boundary.
+    if (p.life <= 0 || (p.vx < 0 ? p.x - p.radius <= 0 : p.x + p.radius >= VIEW_WIDTH) || p.y + p.radius >= FLOOR) {
+      stopCombatSound(p.sound);
+      projectiles.splice(i, 1);
+      continue;
+    }
     const box = { left: p.x - p.radius, right: p.x + p.radius, top: p.y - p.radius, bottom: p.y + p.radius };
     if (!isVanished(target) && target.invuln <= 0 && overlaps(box, hurtBox(target))) {
+      stopCombatSound(p.sound);
       hit(target, p.damage, Math.sign(p.vx) * 180, 0, p.owner,
         { direction: Math.sign(p.vx), sourceX: p.x - Math.sign(p.vx) * p.radius, projectile: true, low: false, x: p.x, y: p.y });
       if (p.style === "flowers") burst(p.x, p.y, "#ff72bb", 15);
       if (p.style === "lightning") burst(p.x, p.y, "#a8edff", 14);
       projectiles.splice(i, 1);
       if (state !== "playing") return;
-    } else if (p.life <= 0 || p.x < -50 || p.x > 1010 || p.y > FLOOR) projectiles.splice(i, 1);
+    }
   }
 }
 
@@ -787,6 +825,7 @@ function hit(target, damage, knockX, knockY, attacker, contact = {}) {
     hitStop = .025;
     sfx("block");
   } else {
+    stopFighterSound(target);
     target.health = Math.max(0, target.health - damage);
     target.power = Math.min(100, target.power + damage * .8);
     attacker.power = Math.min(100, attacker.power + damage * .7);
@@ -809,6 +848,7 @@ function hit(target, damage, knockX, knockY, attacker, contact = {}) {
     sfx("hit");
     if (navigator.vibrate) navigator.vibrate(15);
   }
+  suspendCombatSounds();
   if (target.health <= 0 && !resolvingContacts) finishRound(attacker, "K.O.");
   return true;
 }
@@ -822,6 +862,7 @@ function finishRound(winner, reason) {
   state = match.complete ? "finished" : "roundOver";
   resultElapsed = 0;
   stopRoundVoice();
+  stopAllCombatSounds();
   setPauseUI(false);
   clearHeld();
   ui.resultKicker.textContent = match.playerWins + " — " + match.cpuWins;
@@ -840,6 +881,12 @@ function isLocked(f) {
 function actionProgress(f) {
   if (!f.actionDuration) return 0;
   return Math.max(0, Math.min(1, 1 - f.actionTime / f.actionDuration));
+}
+
+function uppercutRise(f) {
+  const elapsed = f.actionDuration - f.actionTime;
+  return smoothstep((elapsed - MOVES.uppercut.startup * .5) / (MOVES.uppercut.startup * .5 + MOVES.uppercut.active))
+    * (1 - smoothstep((elapsed - MOVES.uppercut.startup - MOVES.uppercut.active) / MOVES.uppercut.recovery));
 }
 
 function burst(x, y, color, count) {
@@ -1002,6 +1049,10 @@ function draw() {
 function poseFor(f) {
   const progress = actionProgress(f);
   if (f.action === "hit") return POSES[f.kind].hit;
+  if (f.action === "uppercut") {
+    const elapsed = f.actionDuration - f.actionTime;
+    return elapsed < MOVES.uppercut.startup * .65 || elapsed > MOVES.uppercut.startup + MOVES.uppercut.active + MOVES.uppercut.recovery * .6 ? 8 : 12;
+  }
   // Frames 6–11 come from the movement atlas, with separate jump and guard poses.
   if (f.action === "teleport") return 11;
   if (f.action === "slam") return f.slamLanded ? 11 : f.slamDiving ? POSES.tunki.slam : f.slamLaunched ? 10 : 8;
@@ -1093,7 +1144,13 @@ function fighterMotion(f) {
   const windup = move ? Math.sin(Math.PI * Math.min(1, elapsed / move.startup)) : 0;
   const extension = move ? smoothstep((elapsed - move.startup * .45) / (move.startup * .55))
     * (1 - smoothstep((elapsed - move.startup - move.active) / move.recovery)) : 0;
-  if (f.action === "punch") {
+  if (f.action === "uppercut") {
+    const rise = uppercutRise(f);
+    motion.dx += f.facing * (10 * rise - 3 * windup);
+    motion.rotation -= f.facing * .035 * rise;
+    motion.scaleY = .80 + .20 * rise;
+    motion.scaleX = 1.03 - .03 * rise;
+  } else if (f.action === "punch") {
     motion.dx += f.facing * (-5 * windup + 15 * extension);
     motion.rotation += f.facing * (.018 * windup - .038 * extension);
     motion.scaleX += .035 * extension;
@@ -1165,6 +1222,21 @@ function renderedFighter(f) {
 
 function drawMotionLines(f, motion) {
   const progress = actionProgress(f);
+  if (f.action === "uppercut" && progress > .15 && progress < .75) {
+    ctx.save();
+    ctx.translate(f.x + motion.dx, f.y - 120 * FIGHTER_SCALE);
+    ctx.scale(f.facing * FIGHTER_SCALE, FIGHTER_SCALE);
+    ctx.strokeStyle = powerColor(f.kind);
+    ctx.globalAlpha = .65 * Math.sin(Math.PI * progress);
+    ctx.lineCap = "round";
+    for (const [radius, width] of [[72, 5], [83, 2]]) {
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, radius, radius * 1.15, 0, -.1 - smoothstep(progress / .6) * 1.4, .7, false);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
   const active = (f.action === "kick" && progress > .16 && progress < .78)
     || (f.action === "punch" && progress > .2 && progress < .65);
 
@@ -1250,16 +1322,18 @@ function drawMotionLines(f, motion) {
 function spriteFrame(frame) {
   const key = frame.kind + ":" + frame.pose;
   if (spriteFrames.has(key)) return spriteFrames.get(key);
-  const movement = frame.pose >= 6;
-  const image = assets[frame.kind + (movement ? "Motion" : "")];
+  const uppercut = frame.pose === 12;
+  const movement = frame.pose >= 6 && !uppercut;
+  const image = uppercut ? assets.uppercuts : assets[frame.kind + (movement ? "Motion" : "")];
   if (!image.complete || !image.naturalWidth) return null;
-  const pose = frame.pose % 6;
+  const pose = uppercut ? roster.indexOf(frame.kind) : frame.pose % 6;
   const cell = 270;
   const surface = document.createElement("canvas");
   surface.width = surface.height = cell;
   const paint = surface.getContext("2d");
-  const baseline = movement || frame.kind !== "blotta" ? 260 : (pose === 4 ? 265 : 269);
-  paint.drawImage(image, (pose % 3) * cell, Math.floor(pose / 3) * cell, cell, cell, 0, 260 - baseline, cell, cell);
+  const baseline = uppercut || movement || frame.kind !== "blotta" ? 260 : (pose === 4 ? 265 : 269);
+  const columns = uppercut ? 2 : 3;
+  paint.drawImage(image, (pose % columns) * cell, Math.floor(pose / columns) * cell, cell, cell, 0, 260 - baseline, cell, cell);
   // Stage lighting is applied once, preserving every original silhouette and detail.
   paint.globalCompositeOperation = "source-atop";
   const light = paint.createLinearGradient(0, 0, cell * .4, cell);
@@ -1516,12 +1590,14 @@ function togglePause() {
     pauseFrom = state;
     state = "paused";
     stopRoundVoice();
+    suspendCombatSounds();
     clearHeld();
     fighters.forEach(f => { f.queuedAction = null; });
     setPauseUI(true);
     announce("PAUSA");
   } else if (state === "paused") {
     state = pauseFrom;
+    syncCombatSounds();
     clearHeld();
     lastTime = performance.now();
     accumulator = 0;
@@ -1558,6 +1634,80 @@ function ensureAudio() {
   if (!audioCtx) audioCtx = new Audio();
   if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
   [1, 2, 3].forEach(loadRoundVoice);
+  Object.keys(COMBAT_AUDIO).forEach(loadCombatAudio);
+}
+
+function loadCombatAudio(name) {
+  const cue = COMBAT_AUDIO[name];
+  if (!audioCtx || cue.buffer || cue.loading || typeof fetch !== "function") return;
+  cue.loading = fetch(cue.src)
+    .then(response => { if (!response.ok) throw new Error("Combat audio unavailable"); return response.arrayBuffer(); })
+    .then(bytes => audioCtx.decodeAudioData(bytes))
+    .then(buffer => { cue.buffer = buffer; syncCombatSounds(); })
+    .catch(() => { /* A missing sound must never interrupt combat. */ });
+}
+
+function startCombatSound(name) {
+  const voice = { name, elapsed: 0, source: null, gain: null };
+  combatSounds.add(voice);
+  ensureAudio();
+  syncCombatSounds();
+  return voice;
+}
+
+function disconnectCombatVoice(voice) {
+  if (voice.source) {
+    voice.source.onended = null;
+    try { voice.source.stop(); } catch (_) { /* Already stopped. */ }
+    voice.source.disconnect();
+    voice.source = null;
+  }
+  if (voice.gain) { voice.gain.disconnect(); voice.gain = null; }
+}
+
+function stopCombatSound(voice) {
+  if (!voice) return;
+  disconnectCombatVoice(voice);
+  combatSounds.delete(voice);
+}
+
+function stopFighterSound(f) {
+  stopCombatSound(f.attackSound);
+  f.attackSound = null;
+}
+
+function stopAllCombatSounds() {
+  for (const voice of combatSounds) stopCombatSound(voice);
+  fighters.forEach(f => { f.attackSound = null; });
+}
+
+function suspendCombatSounds() {
+  for (const voice of combatSounds) disconnectCombatVoice(voice);
+}
+
+function syncCombatSounds() {
+  if (state !== "playing" || hitStop > 0 || muted || !audioCtx || audioCtx.state !== "running") return;
+  for (const voice of combatSounds) {
+    const cue = COMBAT_AUDIO[voice.name];
+    if (voice.source || !cue.buffer) continue;
+    const source = audioCtx.createBufferSource();
+    const gain = audioCtx.createGain();
+    source.buffer = cue.buffer;
+    // Loops cover long flights. The owning attack ends the sound, never a timeout.
+    source.loop = true;
+    source.loopStart = cue.start;
+    source.loopEnd = Math.min(cue.end ?? cue.buffer.duration, cue.buffer.duration);
+    gain.gain.value = cue.volume;
+    source.connect(gain).connect(audioCtx.destination);
+    voice.source = source;
+    voice.gain = gain;
+    source.start(0, cue.start + voice.elapsed % (source.loopEnd - cue.start));
+  }
+}
+
+function advanceCombatSounds(dt) {
+  for (const voice of combatSounds) voice.elapsed += dt;
+  syncCombatSounds();
 }
 
 function loadRoundVoice(round = match.round) {
@@ -1664,10 +1814,10 @@ ui.pauseBtn.addEventListener("click", togglePause);
 
 ui.soundBtn.addEventListener("click", () => {
   muted = !muted;
-  if (muted) stopRoundVoice();
+  if (muted) { stopRoundVoice(); suspendCombatSounds(); }
   ui.soundBtn.textContent = muted ? "🔇" : "🔊";
   ui.soundBtn.setAttribute("aria-label", muted ? "Activar sonido" : "Desactivar sonido");
-  if (!muted) { ensureAudio(); syncRoundVoice(); if (state !== "intro") sfx("start"); }
+  if (!muted) { ensureAudio(); syncRoundVoice(); syncCombatSounds(); if (state !== "intro") sfx("start"); }
 });
 
 const HOLD_KEYS = {

@@ -660,3 +660,173 @@ test("automatic round changes preserve the render clock within a fixed-step fram
   assert.ok(g.run("accumulator >= 0 && accumulator < STEP"));
   assert.ok(g.run("renderAlpha >= 0 && renderAlpha <= 1"));
 });
+
+function enableCombatAudio(g) {
+  g.run(`
+    var combatLog = [];
+    sfx = () => {};
+    audioCtx = { state: "running", destination: {},
+      createGain() { return { gain: {value: 1}, connect() { return this; }, disconnect() {} }; },
+      createBufferSource() {
+        return { connect() { return this; }, disconnect() {},
+          start(when, offset) { combatLog.push({event: "start", name: this.buffer.name, offset, source: this}); },
+          stop() { combatLog.push({event: "stop", name: this.buffer.name, source: this}); }
+        };
+      }
+    };
+    Object.entries(COMBAT_AUDIO).forEach(([name, cue]) => { cue.buffer = {name, duration: 3}; });
+    muted = false;
+  `);
+}
+
+test("all four fighters uppercut with down+punch on keyboard and touch, launch once and return to crouch", () => {
+  for (const kind of ["sergio", "blotta", "tunki", "marechal"]) {
+    for (const input of ["keyboard", "touch"]) {
+      const g = game();
+      g.run(`startGame('${kind}', '${kind === "blotta" ? "marechal" : "blotta"}'); state = "playing"; player.x = 300; cpu.x = 370;`);
+      if (input === "keyboard") { g.key("KeyS"); g.key("KeyJ"); }
+      else {
+        g.holds[2].listeners.pointerdown({pointerId: 1, pointerType: "touch", preventDefault() {}});
+        g.taps[1].listeners.pointerdown({pointerId: 2, pointerType: "touch", preventDefault() {}});
+      }
+      assert.equal(g.run("player.action"), "uppercut");
+      assert.equal(g.run("player.power"), 40);
+      g.tick(.075);
+      assert.equal(g.run("cpu.health"), 100);
+      assert.equal(g.run("poseFor(player)"), 12);
+      g.tick(.08);
+      assert.equal(g.run("cpu.health"), 88);
+      assert.ok(g.run("cpu.vy < 0 && !cpu.grounded"));
+      g.tick(.8);
+      assert.equal(g.run("cpu.health"), 88);
+      assert.equal(g.run("player.action"), "idle");
+      assert.equal(g.run("poseFor(player)"), 8);
+    }
+  }
+});
+
+test("uppercut can catch an airborne rival, respects front guard, and is not an automatic jump attack", () => {
+  const g = game();
+  g.run('player.x = 300; cpu.x = 370; cpu.y = FLOOR - 180; cpu.grounded = false;');
+  g.key("ArrowDown"); g.key("KeyJ");
+  g.run('player.actionTime = player.actionDuration - MOVES.uppercut.startup - MOVES.uppercut.active * .8;');
+  assert.ok(g.run("attackContact(player, cpu) !== null"));
+  for (const down of [false, true]) {
+    const h = game();
+    h.run(`player.x = 300; cpu.x = 370; cpu.facing = -1; cpu.guarding = true; cpu.crouching = ${down};`);
+    h.key("KeyS"); h.key("KeyJ"); h.tick(.25);
+    assert.equal(h.run("cpu.health"), 100);
+    assert.equal(h.run("cpu.grounded"), true);
+  }
+  g.run('startGame("sergio"); state = "playing";');
+  g.key("KeyW"); g.key("KeyS"); g.key("KeyJ");
+  assert.equal(g.run("player.action"), "punch");
+});
+
+test("melee voices use each supplied clip, skip initial silence and stop on whiff recovery", () => {
+  for (const [kind, input, crouch, sound] of [
+    ["sergio", "KeyJ", false, "belly"], ["sergio", "KeyJ", true, "general"],
+    ["blotta", "KeyJ", false, "general"], ["tunki", "KeyJ", false, "general"],
+    ["marechal", "KeyJ", false, "general"], ["sergio", "KeyK", false, "general"]
+  ]) {
+    const g = game();
+    g.run(`startGame('${kind}'); state = "playing";`);
+    enableCombatAudio(g);
+    if (crouch) g.key("KeyS");
+    g.key(input);
+    assert.equal(g.run("combatLog[0].name"), sound);
+    assert.equal(g.run("combatLog[0].offset"), g.run(`COMBAT_AUDIO.${sound}.start`));
+    assert.equal(g.run("combatSounds.size"), 1);
+    g.tick(.8);
+    assert.equal(g.run("combatSounds.size"), 0);
+    assert.equal(g.run('combatLog.filter(e => e.event === "stop").length'), 1);
+  }
+});
+
+test("blocking and interrupted melee stop the owning sound immediately", () => {
+  const g = game(); enableCombatAudio(g);
+  g.run('player.x = 300; cpu.x = 370; cpu.facing = -1; cpu.guarding = true;');
+  g.key("KeyJ"); g.tick(.12);
+  assert.equal(g.run("cpu.health"), 100);
+  assert.equal(g.run("combatSounds.size"), 0);
+  assert.equal(g.run("player.attackSound"), null);
+  const h = game(); enableCombatAudio(h);
+  h.key("KeyJ");
+  h.run('hit(player, 8, -150, 0, cpu);');
+  assert.equal(h.run("player.action"), "hit");
+  assert.equal(h.run("combatSounds.size"), 0);
+});
+
+test("power audio begins on release, continues after casting, and stops on collision or block", () => {
+  for (const kind of ["sergio", "marechal"]) {
+    for (const block of [false, true]) {
+      const g = game();
+      g.run(`startGame('${kind}', 'blotta'); state = "playing"; player.x = 100; cpu.x = 750; cpu.facing = -1; cpu.guarding = ${block};`);
+      enableCombatAudio(g);
+      g.key("KeyL"); g.tick(.15);
+      assert.equal(g.run("combatLog.length"), 0);
+      g.tick(.4);
+      assert.equal(g.run("player.action"), "idle");
+      assert.equal(g.run("combatSounds.size"), 1);
+      assert.equal(g.run("combatLog[0].name"), kind === "sergio" ? "meat" : "lightning");
+      g.tick(1.4);
+      assert.equal(g.run("projectiles.length"), 0);
+      assert.equal(g.run("combatSounds.size"), 0);
+      assert.equal(g.run("cpu.health"), block ? 99 : kind === "sergio" ? 90 : 87);
+    }
+  }
+});
+
+test("projectile sound ends at either visible edge, expiry or floor and voices remain independent", () => {
+  for (const direction of [-1, 1]) {
+    const g = game(); enableCombatAudio(g);
+    g.run(`player.facing = ${direction}; spawnProjectile(player, 'lightning'); projectiles[0].x = ${direction > 0 ? 945 : 15};`);
+    g.tick(1 / 120);
+    assert.equal(g.run("projectiles.length"), 0);
+    assert.equal(g.run("combatSounds.size"), 0);
+  }
+  const g = game(); enableCombatAudio(g);
+  g.run('spawnProjectile(player, "lightning"); spawnProjectile(player, "meat"); projectiles[0].life = 0;');
+  g.tick(1 / 120);
+  assert.equal(g.run("projectiles.length"), 1);
+  assert.equal(g.run("combatSounds.size"), 1);
+  assert.equal(g.run("[...combatSounds][0].name"), "meat");
+  assert.ok(g.run("[...combatSounds][0].source !== null"));
+  g.run('projectiles[0].y = FLOOR;'); g.tick(1 / 120);
+  assert.equal(g.run("combatSounds.size"), 0);
+});
+
+test("combat voices freeze on pause/blur and resume from the correct position after mute", () => {
+  const g = game(); enableCombatAudio(g);
+  g.run('spawnProjectile(player, "lightning"); cpu.crouching = true;');
+  g.tick(.2);
+  const elapsed = g.run("projectiles[0].sound.elapsed");
+  g.key("Space"); g.tick(1);
+  assert.equal(g.run("projectiles[0].sound.elapsed"), elapsed);
+  assert.equal(g.run("projectiles[0].sound.source"), null);
+  g.key("Space");
+  assert.ok(Math.abs(g.run("combatLog.at(-1).offset") - elapsed - .035) < 1e-8);
+  g.nodes.get("soundBtn").listeners.click();
+  assert.equal(g.run("projectiles[0].sound.source"), null);
+  g.tick(.15);
+  g.nodes.get("soundBtn").listeners.click();
+  assert.ok(g.run("combatLog.at(-1).offset") > elapsed + .17);
+  g.nodes.get("window").listeners.blur();
+  assert.equal(g.run("state"), "paused");
+  assert.equal(g.run("projectiles[0].sound.source"), null);
+  g.key("Space"); g.tick(2);
+  assert.equal(g.run("combatSounds.size"), 0);
+});
+
+test("round end and selection clear all combat voices and late audio cannot revive old attacks", () => {
+  const g = game(); enableCombatAudio(g);
+  g.run('spawnProjectile(player, "meat"); attack(cpu, "kick"); finishRound(player, "K.O.");');
+  assert.equal(g.run("combatSounds.size"), 0);
+  g.run('startRound(); state = "playing"; spawnProjectile(player, "lightning"); openSelection();');
+  assert.equal(g.run("combatSounds.size"), 0);
+  g.run('startGame("blotta"); state = "playing"; COMBAT_AUDIO.general.buffer = null;');
+  g.key("KeyJ"); g.tick(.5);
+  const count = g.run("combatLog.length");
+  g.run('COMBAT_AUDIO.general.buffer = {name: "general", duration: 1}; syncCombatSounds();');
+  assert.equal(g.run("combatLog.length"), count);
+});
