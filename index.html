@@ -4,21 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="theme-color" content="#020716">
-  <meta name="description" content="KP Fighter: Sergio contra Blotta. Juego arcade de lucha para computadora y celular.">
-  <title>KP Fighter — Sergio vs Blotta</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="description" content="KP Fighter, juego arcade de lucha para computadora y celular.">
+  <title>KP FIGHTER</title>
+  <link rel="stylesheet" href="style.css?v=20260905">
 </head>
 <body>
   <main id="arcade" class="arcade" aria-label="KP Fighter">
     <div class="cabinet-bezel" aria-hidden="true"></div>
 
     <section id="titleScreen" class="screen title-screen active" aria-labelledby="gameTitle">
-      <div class="title-fighter title-sergio" aria-hidden="true"></div>
-      <div class="title-fighter title-blotta" aria-hidden="true"></div>
       <div class="title-center">
-        <p class="title-super">SUPER</p>
-        <h1 id="gameTitle"><span>KP</span> FIGHTER <em>II</em></h1>
-        <p class="title-sub">SERGIO <b>VS</b> BLOTTA</p>
+        <p class="title-super">ARCADE</p>
+        <h1 id="gameTitle"><span>KP</span> FIGHTER</h1>
         <button id="startBtn" class="start-btn" type="button">PRESIONA START</button>
         <p class="title-credit">1 PLAYER · ARCADE EDITION</p>
       </div>
@@ -28,31 +25,44 @@
       <header class="select-header">
         <span class="player-one">1P</span>
         <h2 id="selectTitle">SELECT YOUR FIGHTER</h2>
-        <span class="select-clock" id="selectClock">15</span>
+        <span class="select-clock" id="selectClock">∞</span>
       </header>
 
       <div class="portrait portrait-sergio selected" data-portrait="sergio" aria-hidden="true">
-        <img src="assets/sergio-portrait.png" alt="">
+        <img src="assets/sergio-portrait-v4.png" alt="">
         <span>SERGIO</span>
       </div>
       <div class="portrait portrait-blotta" data-portrait="blotta" aria-hidden="true">
         <img src="assets/blotta-portrait.png" alt="">
         <span>BLOTTA</span>
       </div>
-      <div class="select-versus" aria-hidden="true">VS</div>
+      <div class="portrait portrait-tunki" data-portrait="tunki" aria-hidden="true">
+        <img src="assets/tunki-portrait-v1.png" alt="">
+        <span>LA TUNKI</span>
+      </div>
+      <div class="selection-info" aria-live="polite">
+        <p class="selection-kicker">ELIGE TU LUCHADOR</p>
+        <h3 id="selectionName">SERGIO</h3>
+        <p id="selectionMoves">PANZAZO · ASADO · FERNET</p>
+      </div>
 
       <div class="choice-dock" role="group" aria-label="Elegir luchador">
         <p class="choose-label">CHOOSE YOUR FIGHTER</p>
         <div class="choice-row">
           <button class="choice-tile selected" type="button" data-pick="sergio" aria-label="Elegir a Sergio">
             <span class="p1-arrow" aria-hidden="true">▼<small>1P</small></span>
-            <img src="assets/sergio-portrait.png" alt="Sergio">
+            <img src="assets/sergio-portrait-v4.png" alt="Sergio">
             <strong>SERGIO</strong>
           </button>
           <button class="choice-tile" type="button" data-pick="blotta" aria-label="Elegir a Blotta">
             <span class="p1-arrow" aria-hidden="true">▼<small>1P</small></span>
             <img src="assets/blotta-portrait.png" alt="Blotta">
             <strong>BLOTTA</strong>
+          </button>
+          <button class="choice-tile" type="button" data-pick="tunki" aria-label="Elegir a La Tunki">
+            <span class="p1-arrow" aria-hidden="true">▼<small>1P</small></span>
+            <img src="assets/tunki-portrait-v1.png" alt="La Tunki">
+            <strong>LA TUNKI</strong>
           </button>
         </div>
         <button id="confirmBtn" class="confirm-btn" type="button">FIGHT!</button>
@@ -62,7 +72,7 @@
     </section>
 
     <section id="gameScreen" class="screen fight-screen" aria-label="Combate">
-      <canvas id="game" width="960" height="540" aria-label="Combate entre Sergio y Blotta"></canvas>
+      <canvas id="game" width="960" height="540" aria-label="Combate de KP Fighter"></canvas>
 
       <div class="hud" aria-hidden="true">
         <div class="hud-side left-hud">
@@ -81,6 +91,7 @@
       <button id="soundBtn" class="corner-btn sound-btn" type="button" aria-label="Desactivar sonido">♪</button>
       <button id="pauseBtn" class="corner-btn pause-btn" type="button" aria-label="Pausar juego">PAUSA</button>
       <div id="announcement" class="announcement" aria-live="assertive"></div>
+      <p id="pauseHelp" class="pause-help" hidden>ESPACIO PARA SEGUIR</p>
       <div id="speechBubble" class="speech-bubble" hidden>¡Te voy a echar!</div>
       <div id="flash" class="hit-flash" aria-hidden="true"></div>
 
@@ -98,26 +109,33 @@
           <button class="touch-btn direction" data-hold="left" type="button" aria-label="Mover a la izquierda">◀</button>
           <button class="touch-btn direction jump" data-tap="jump" type="button" aria-label="Saltar">▲</button>
           <button class="touch-btn direction" data-hold="right" type="button" aria-label="Mover a la derecha">▶</button>
+          <button class="touch-btn direction crouch" data-hold="down" type="button" aria-label="Agacharse">▼</button>
         </div>
         <div class="attack-controls">
           <button class="touch-btn attack punch" data-tap="punch" type="button" aria-label="Golpe"><span>A</span><small>GOLPE</small></button>
           <button class="touch-btn attack kick" data-tap="kick" type="button" aria-label="Patada"><span>B</span><small>PATADA</small></button>
           <button class="touch-btn attack special" data-tap="special" type="button" aria-label="Poder especial"><span>★</span><small>PODER</small></button>
+          <button class="touch-btn attack guard" data-hold="guard" type="button" aria-label="Cubrirse"><span>◆</span><small>CUBRIR</small></button>
+          <button id="abilityBtn" class="touch-btn attack teleport" data-tap="ability" type="button" aria-label="Habilidad propia" hidden><span id="abilityIcon">☁</span><small id="abilityLabel">HUMO</small></button>
         </div>
       </div>
 
       <div class="desktop-help" aria-hidden="true">
         <span><kbd>A</kbd><kbd>D</kbd> MOVER</span>
         <span><kbd>W</kbd> SALTAR</span>
+        <span><kbd>S</kbd> AGACHAR</span>
         <span><kbd>J</kbd> GOLPE</span>
         <span><kbd>K</kbd> PATADA</span>
         <span><kbd>L</kbd> PODER</span>
+        <span><kbd>I</kbd> CUBRIR</span>
+        <span id="abilityHelp"><kbd>H</kbd> <span id="abilityKeyLabel">HUMO</span></span>
+        <span><kbd>ESPACIO</kbd> PAUSA</span>
       </div>
     </section>
 
     <div class="scanlines" aria-hidden="true"></div>
   </main>
 
-  <script src="game.js"></script>
+  <script src="game.js?v=20260905"></script>
 </body>
 </html>
