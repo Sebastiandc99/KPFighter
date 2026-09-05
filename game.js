@@ -13,6 +13,7 @@ let drawingScale = 1;
 const ui = {
   titleScreen: document.getElementById("titleScreen"),
   selectScreen: document.getElementById("selectScreen"),
+  stageScreen: document.getElementById("stageScreen"),
   gameScreen: document.getElementById("gameScreen"),
   startBtn: document.getElementById("startBtn"),
   confirmBtn: document.getElementById("confirmBtn"),
@@ -33,6 +34,14 @@ const ui = {
   pauseBtn: document.getElementById("pauseBtn"),
   abilityBtn: document.getElementById("abilityBtn")
 };
+
+const stages = {
+  arcade: { name: "PATIO ARCADE", src: "assets/arena.jpg", description: "El escenario original de KP FIGHTER." },
+  mine: { name: "GALERÍA SUBTERRÁNEA", src: "assets/stage-mine.webp", description: "Roca, luces cálidas y combate bajo tierra." },
+  newmont: { name: "PLANTA NEWMONT", src: "assets/stage-newmont.webp", description: "La planta minera, a cielo abierto." }
+};
+const stageRoster = Object.keys(stages);
+const stageImages = Object.fromEntries(stageRoster.map(key => [key, loadImage(stages[key].src)]));
 
 const assets = {
   arena: loadImage("assets/arena.jpg"),
@@ -63,7 +72,14 @@ const stats = {
 const roster = Object.keys(stats);
 const FLOOR = 448;
 const STEP = 1 / 120;
-const INTRO = { voice: 1.35, fight: 3.30, end: 3.95 };
+const JUMP_BOOST = 1.25;
+// Cues follow the measured speech onsets in each supplied MP3, including leading silence.
+const INTRO = { voice: 1.10, title: 1.338, fight: 3.144, end: 3.80 };
+const ROUND_AUDIO = {
+  1: { src: "assets/round-1.mp3", title: "ROUND 1", timing: INTRO, buffer: null, loading: null },
+  2: { src: "assets/round-2.mp3", title: "ROUND 2", timing: { voice: .35, title: .412, fight: 2.206, end: 2.75 }, buffer: null, loading: null },
+  3: { src: "assets/final-round.mp3", title: "FINAL ROUND", timing: { voice: .35, title: .520, fight: 2.304, end: 3.00 }, buffer: null, loading: null }
+};
 const MOVES = {
   punch: { startup: .085, active: .095, recovery: .18, reach: 77, damage: 8, knock: 160 },
   kick: { startup: .12, active: .16, recovery: .23, reach: 106, damage: 11, knock: 235 },
@@ -76,12 +92,16 @@ const MOVES = {
 
 let state = "title";
 let playerChoice = "sergio";
+let stageChoice = "arcade";
+let match = { round: 1, playerWins: 0, cpuWins: 0, complete: false, repeat: false };
+let resolvingContacts = false;
 let player = null;
 let cpu = null;
 let fighters = [];
 let projectiles = [];
 let particles = [];
 let afterimages = [];
+let effects = [];
 let held = { left: false, right: false, down: false, guard: false };
 let roundTime = 60;
 let lastTime = performance.now();
@@ -90,8 +110,6 @@ let screenShake = 0;
 let stageTime = 0;
 let muted = false;
 let audioCtx = null;
-let roundVoiceBuffer = null;
-let roundVoiceLoading = null;
 let roundVoiceSource = null;
 let roundVoiceStarted = false;
 let accumulator = 0;
@@ -171,7 +189,7 @@ function makeFighter(kind, x, isPlayer) {
 }
 
 function showScreen(screen) {
-  [ui.titleScreen, ui.selectScreen, ui.gameScreen].forEach(node => {
+  [ui.titleScreen, ui.selectScreen, ui.stageScreen, ui.gameScreen].forEach(node => {
     node.classList.toggle("active", node === screen);
   });
 }
@@ -204,18 +222,47 @@ function openSelection() {
   sfx("start");
 }
 
-function startGame(choice) {
-  stopRoundVoice();
-  roundVoiceStarted = false;
+function chooseStage(key, playSound = true) {
+  if (!stages[key]) return;
+  stageChoice = key;
+  document.getElementById("stagePreview").src = stages[key].src;
+  document.getElementById("stageName").textContent = stages[key].name;
+  document.getElementById("stageDescription").textContent = stages[key].description;
+  document.querySelectorAll("[data-stage]").forEach(button => {
+    button.classList.toggle("selected", button.dataset.stage === key);
+    button.setAttribute("aria-pressed", String(button.dataset.stage === key));
+  });
+  if (playSound) sfx("move");
+}
+
+function openStageSelection() {
+  state = "stage";
+  clearHeld();
+  showScreen(ui.stageScreen);
+  document.getElementById("stageFighter").textContent = stats[playerChoice].name + " · GANA DOS ROUNDS";
+  chooseStage(stageChoice, false);
+  ensureAudio();
+}
+
+function startGame(choice, opponentKind = null) {
+  accumulator = 0;
   playerChoice = choice;
   const opponents = roster.filter(kind => kind !== choice);
-  const other = opponents[Math.floor(Math.random() * opponents.length)];
-  player = makeFighter(choice, 235, true);
-  cpu = makeFighter(other, 725, false);
+  match = { round: 1, playerWins: 0, cpuWins: 0, complete: false, repeat: false,
+    playerKind: choice, cpuKind: opponents.includes(opponentKind) ? opponentKind : opponents[Math.floor(Math.random() * opponents.length)] };
+  startRound();
+}
+
+function startRound() {
+  stopRoundVoice();
+  roundVoiceStarted = false;
+  player = makeFighter(match.playerKind, 235, true);
+  cpu = makeFighter(match.cpuKind, 725, false);
   fighters = [player, cpu];
   projectiles = [];
   particles = [];
   afterimages = [];
+  effects = [];
   clearHeld();
   roundTime = 60;
   aiClock = 0;
@@ -223,13 +270,13 @@ function startGame(choice) {
   stageTime = 0;
   introElapsed = 0;
   resultElapsed = 0;
-  accumulator = 0;
   hitStop = 0;
   state = "intro";
   showScreen(ui.gameScreen);
   syncViewport();
   setPauseUI(false);
   ui.resultPanel.hidden = true;
+  document.getElementById("roundNotice").hidden = true;
   ui.leftName.textContent = stats[player.kind].name;
   ui.rightName.textContent = stats[cpu.kind].name;
   const ability = stats[player.kind].ability;
@@ -249,7 +296,7 @@ function startGame(choice) {
 
 function beginIntro() {
   introElapsed = 0;
-  ui.speech.hidden = !fighters.some(f => f.kind === "blotta");
+  ui.speech.hidden = match.round !== 1 || match.repeat || !fighters.some(f => f.kind === "blotta");
   positionSpeech();
   ui.announcement.classList.remove("show");
   announcementTime = 0;
@@ -269,38 +316,41 @@ function positionSpeech() {
 }
 
 function update(dt) {
-  if (!["intro", "playing", "finished"].includes(state)) return;
+  if (!["intro", "playing", "roundOver", "finished"].includes(state)) return;
   fighters.forEach(f => {
     f.prevX = f.x; f.prevY = f.y;
     f.animation.prevMotion = { ...f.animation.motion };
     f.animation.prevMix = f.animation.mix;
   });
   projectiles.forEach(p => { p.prevX = p.x; p.prevY = p.y; p.prevSpin = p.spin; });
+  particles.forEach(p => { p.prevX = p.x; p.prevY = p.y; });
   stageTime += dt;
   if (announcementTime > 0) {
     announcementTime -= dt;
     if (announcementTime <= 0) ui.announcement.classList.remove("show");
   }
   if (state === "intro") {
+    const timing = ROUND_AUDIO[match.round].timing;
     const before = introElapsed;
     introElapsed += dt;
     fighters.forEach(f => { f.animClock += dt; updateAnimation(f, dt); });
-    if (before < INTRO.voice && introElapsed >= INTRO.voice) {
+    if (before < timing.title && introElapsed >= timing.title) {
       ui.speech.hidden = true;
-      announce("ROUND 1", (INTRO.fight - INTRO.voice - .15) * 1000);
+      announce(ROUND_AUDIO[match.round].title, (timing.fight - timing.title - .15) * 1000);
     }
     syncRoundVoice();
-    if (before < INTRO.fight && introElapsed >= INTRO.fight) {
+    if (before < timing.fight && introElapsed >= timing.fight) {
       announce("¡PELEA!", 600);
       if (!roundVoiceStarted) sfx("fight");
     }
-    if (introElapsed >= INTRO.end) { stopRoundVoice(); state = "playing"; }
+    if (introElapsed >= timing.end) { stopRoundVoice(); state = "playing"; }
     return;
   }
-  if (state === "finished") {
+  if (state === "finished" || state === "roundOver") {
     resultElapsed += dt;
     updateParticles(dt);
     updateAfterimages(dt);
+    updateEffects(dt);
     screenShake = Math.max(0, screenShake - dt * 32);
     fighters.forEach(f => {
       f.actionTime = Math.max(0, f.actionTime - dt);
@@ -308,7 +358,12 @@ function update(dt) {
       if (!f.grounded) integrateBody(f, dt);
       updateAnimation(f, dt);
     });
-    if (resultElapsed >= .8) ui.resultPanel.hidden = false;
+    if (state === "finished" && resultElapsed >= .8) ui.resultPanel.hidden = false;
+    if (state === "roundOver" && resultElapsed >= .8) document.getElementById("roundNotice").hidden = false;
+    if (state === "roundOver" && resultElapsed >= 2.65) {
+      match.round = match.playerWins + match.cpuWins + 1;
+      startRound();
+    }
     return;
   }
   if (hitStop > 0) {
@@ -339,14 +394,20 @@ function update(dt) {
   separateFighters();
   // Capture both contacts before resolving so simultaneous hits can trade.
   const contacts = fighters.map(f => attackContact(f, f === player ? cpu : player)).filter(Boolean);
+  resolvingContacts = true;
   contacts.forEach(contact => {
     contact.attacker.attackLanded = true;
     hit(contact.target, contact.damage, contact.direction * contact.knock, contact.lift, contact.attacker, contact);
   });
+  resolvingContacts = false;
+  if (player.health <= 0 || cpu.health <= 0) {
+    finishRound(player.health <= 0 && cpu.health <= 0 ? null : player.health > 0 ? player : cpu, "K.O.");
+  }
   if (state === "playing") updateProjectiles(dt);
   fighters.forEach(f => updateAnimation(f, dt));
   updateParticles(dt);
   updateAfterimages(dt);
+  updateEffects(dt);
   screenShake = Math.max(0, screenShake - dt * 32);
 }
 
@@ -419,6 +480,7 @@ function integrateBody(f, dt) {
     if (!wasOnFloor) {
       f.landingSquash = .12;
       dustBurst(f.x, FLOOR, 7);
+      addEffect("ground", f.x, FLOOR + 2, "#e4c38a", 44, .28);
       if (f.action === "slam") {
         f.slamLanded = true;
         f.actionTime = f.actionDuration = .33;
@@ -427,6 +489,8 @@ function integrateBody(f, dt) {
         screenShake = 7;
         dustBurst(f.x, FLOOR, 24);
         burst(f.x, FLOOR - 12, "#ff77bc", 15);
+        addEffect("ground", f.x, FLOOR, "#ff82cf", 130, .48);
+        addEffect("impact", f.x, FLOOR - 12, "#ffb6e1", 75, .3);
         sfx("slam");
       }
     }
@@ -449,7 +513,7 @@ function updateFighter(f, dt) {
     if (!f.slamLaunched && elapsed >= MOVES.slam.startup) {
       f.slamLaunched = true;
       f.grounded = false;
-      f.vy = f.slamFromAir ? 180 : -680;
+      f.vy = f.slamFromAir ? 180 : -800;
       f.vx = Math.max(-320, Math.min(320, (other.x - f.x) * 2.6));
       dustBurst(f.x, f.y, 8);
     }
@@ -462,7 +526,9 @@ function updateFighter(f, dt) {
   integrateBody(f, dt);
   // A full stride follows distance travelled; backsteps play the cycle in reverse.
   if (f.grounded && f.action === "idle" && !f.crouching && !f.guarding) {
+    const previousStep = Math.floor(f.walkPhase);
     f.walkPhase = ((f.walkPhase + f.vx * f.facing * dt / 35) % 4 + 4) % 4;
+    if (Math.abs(f.vx) > 90 && Math.floor(f.walkPhase) !== previousStep) dustBurst(f.x - Math.sign(f.vx) * 15, FLOOR, 2);
   }
 
   if (f.actionTime > 0) {
@@ -476,6 +542,7 @@ function updateFighter(f, dt) {
       if (elapsed >= .10 && !f.teleportSmokeStarted) {
         f.teleportSmokeStarted = true;
         smokeBurst(f.x, FLOOR - 70, 20);
+        addEffect("ring", f.x, FLOOR - 80, "#b9a8ff", 60, .32);
       }
       if (elapsed >= .31 && !f.teleportDone) {
         f.teleportDone = true;
@@ -486,6 +553,7 @@ function updateFighter(f, dt) {
         f.x = f.prevX = Math.max(65, Math.min(895, destination));
         f.facing = other.x >= f.x ? 1 : -1;
         smokeBurst(f.x, FLOOR - 70, 22);
+        addEffect("ring", f.x, FLOOR - 80, "#cddcff", 70, .32);
       }
     }
     if (f.actionTime === 0) {
@@ -593,10 +661,11 @@ function jump(f) {
     return false;
   }
   f.crouching = f.guarding = false;
-  f.vy = -stats[f.kind].jump;
+  f.vy = -stats[f.kind].jump * JUMP_BOOST;
   f.vx = f.moveIntent * stats[f.kind].speed * .92;
   f.grounded = false;
   dustBurst(f.x, FLOOR, 4);
+  addEffect("ground", f.x, FLOOR, powerColor(f.kind), 40, .25);
   sfx("jump");
   return true;
 }
@@ -660,10 +729,12 @@ function spawnProjectile(owner, style) {
     style === "bottle" ? { speed: 425, damage: 12, radius: 16 } : { speed: 395, damage: 10, radius: 19 };
   const x = owner.x + owner.facing * 58 * FIGHTER_SCALE;
   const y = owner.y - 143 * FIGHTER_SCALE;
+  addEffect("ring", x, y, powerColor(owner.kind), 36, .22);
+  burst(x, y, powerColor(owner.kind), 5);
   projectiles.push({
     owner, style, x, y, prevX: x, prevY: y, prevSpin: 0,
     vx: owner.facing * config.speed, vy: style === "ki" || style === "lightning" ? 0 : -42,
-    damage: config.damage, radius: config.radius * FIGHTER_SCALE, life: 2.5, spin: 0, trailTime: 0
+    damage: config.damage, radius: config.radius * FIGHTER_SCALE, life: 2.5, spin: 0, trailTime: 0, trail: []
   });
 }
 
@@ -674,9 +745,13 @@ function updateProjectiles(dt) {
     p.x += p.vx * dt;
     p.spin += dt * 8;
     if (p.style !== "ki" && p.style !== "lightning") { p.vy += 82 * dt; p.y += p.vy * dt; }
-    if (p.style === "flowers") {
-      p.trailTime -= dt;
-      if (p.trailTime <= 0) { burst(p.x, p.y, "#ff81c5", 1); p.trailTime = .06; }
+    p.trailTime -= dt;
+    if (p.trailTime <= 0) {
+      p.trail.unshift({ x: p.x, y: p.y });
+      if (p.trail.length > 9) p.trail.pop();
+      p.trailTime = .025;
+      if (p.style === "flowers") burst(p.x, p.y, "#ff81c5", 1);
+      if (p.style === "lightning") burst(p.x, p.y, "#91eaff", 1);
     }
     const target = p.owner === player ? cpu : player;
     const box = { left: p.x - p.radius, right: p.x + p.radius, top: p.y - p.radius, bottom: p.y + p.radius };
@@ -708,6 +783,7 @@ function hit(target, damage, knockX, knockY, attacker, contact = {}) {
     target.invuln = .08;
     target.guardFlash = .20;
     burst(target.x + target.facing * 32 * FIGHTER_SCALE, target.y - (target.crouching ? 65 : 134) * FIGHTER_SCALE, "#8cecff", 6);
+    addEffect("ring", target.x + target.facing * 32 * FIGHTER_SCALE, target.y - (target.crouching ? 65 : 134) * FIGHTER_SCALE, "#8cecff", 38, .24);
     hitStop = .025;
     sfx("block");
   } else {
@@ -729,23 +805,32 @@ function hit(target, damage, knockX, knockY, attacker, contact = {}) {
     screenShake = damage > 11 ? 4 : 2.5;
     hitStop = damage > 11 ? .055 : .035;
     burst(contact.x ?? target.x, contact.y ?? target.y - 104, "#ffd55b", 11);
+    addEffect("impact", contact.x ?? target.x, contact.y ?? target.y - 104, powerColor(attacker.kind), damage > 11 ? 57 : 38, .25);
     sfx("hit");
     if (navigator.vibrate) navigator.vibrate(15);
   }
-  if (target.health <= 0) finishRound(attacker, "K.O.");
+  if (target.health <= 0 && !resolvingContacts) finishRound(attacker, "K.O.");
   return true;
 }
 
 function finishRound(winner, reason) {
   if (state !== "playing") return;
-  state = "finished";
+  if (winner === player) match.playerWins++;
+  else if (winner === cpu) match.cpuWins++;
+  match.repeat = !winner;
+  match.complete = match.playerWins >= 2 || match.cpuWins >= 2;
+  state = match.complete ? "finished" : "roundOver";
   resultElapsed = 0;
+  stopRoundVoice();
   setPauseUI(false);
   clearHeld();
-  ui.resultKicker.textContent = reason;
-  ui.resultTitle.textContent = !winner ? "EMPATE" : winner === player ? "¡GANASTE!" : stats[winner.kind].name + " GANA";
+  ui.resultKicker.textContent = match.playerWins + " — " + match.cpuWins;
+  ui.resultTitle.textContent = winner === player ? "¡GANASTE EL COMBATE!" : stats[cpu.kind].name + " GANA";
+  document.getElementById("roundNotice").textContent = !winner ? "EMPATE · SE REPITE EL ROUND" :
+    stats[winner.kind].name + " GANA EL ROUND · " + match.playerWins + " — " + match.cpuWins;
+  updateHud();
   announce(reason, 750);
-  sfx(winner === player ? "win" : "lose");
+  sfx(match.complete ? winner === player ? "win" : "lose" : "confirm");
 }
 
 function isLocked(f) {
@@ -761,7 +846,7 @@ function burst(x, y, color, count) {
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = 70 + Math.random() * 230;
-    particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: .35 + Math.random() * .25, color, size: 3 + Math.random() * 6 });
+    particles.push({ x, y, prevX: x, prevY: y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: .35 + Math.random() * .25, color, size: 2 + Math.random() * 4, spark: true });
   }
 }
 
@@ -813,6 +898,7 @@ function updateAfterimages(dt) {
 }
 
 function updateParticles(dt) {
+  if (particles.length > 220) particles.splice(0, particles.length - 220);
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
     p.life -= dt;
@@ -823,6 +909,64 @@ function updateParticles(dt) {
   }
 }
 
+function powerColor(kind) {
+  return { sergio: "#ffc650", blotta: "#76daff", tunki: "#ff8bd5", marechal: "#a5eaff" }[kind];
+}
+
+function addEffect(type, x, y, color, radius, life) {
+  if (effects.length >= 48) effects.shift();
+  effects.push({ type, x, y, color, radius, life, maxLife: life });
+}
+
+function updateEffects(dt) {
+  for (let i = effects.length - 1; i >= 0; i--) {
+    effects[i].life -= dt;
+    if (effects[i].life <= 0) effects.splice(i, 1);
+  }
+}
+
+function drawEffect(effect) {
+  const age = 1 - effect.life / effect.maxLife;
+  const radius = effect.radius * (.15 + smoothstep(age) * .85);
+  ctx.save();
+  ctx.translate(effect.x, effect.y);
+  ctx.globalAlpha = (1 - age) * .85;
+  ctx.strokeStyle = effect.color;
+  ctx.lineWidth = Math.max(1, 5 * (1 - age));
+  if (effect.type === "ground") {
+    ctx.scale(1, .22);
+    ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha *= .4;
+    ctx.beginPath(); ctx.arc(0, 0, radius * .7, 0, Math.PI * 2); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.stroke();
+    if (effect.type === "impact") {
+      for (let i = 0; i < 8; i++) {
+        const angle = i * Math.PI / 4 + .2;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(angle) * radius * .25, Math.sin(angle) * radius * .25);
+        ctx.lineTo(Math.cos(angle) * radius * (i % 2 ? .75 : 1.2), Math.sin(angle) * radius * (i % 2 ? .75 : 1.2));
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#fff7d8";
+      ctx.globalAlpha *= 1 - age;
+      ctx.beginPath(); ctx.arc(0, 0, 12 * (1 - age), 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+function drawStage(image, parallaxX) {
+  if (!image.complete || !image.naturalWidth) { ctx.fillStyle = "#16263a"; ctx.fillRect(0, 0, 960, 540); return; }
+  const width = image.naturalWidth;
+  const height = image.naturalHeight || width * 9 / 16;
+  const scale = Math.max(976 / width, 550 / height);
+  const cropWidth = 976 / scale;
+  const cropHeight = 550 / scale;
+  // Preserve image proportions and the plant's Newmont sign when framing 4:3 art.
+  ctx.drawImage(image, (width - cropWidth) / 2, (height - cropHeight) * .6, cropWidth, cropHeight, -8 + parallaxX, -5, 976, 550);
+}
+
 function draw() {
   ctx.setTransform(drawingScale, 0, 0, drawingScale, 0, 0);
   const shakeX = screenShake ? (Math.random() - .5) * screenShake : 0;
@@ -830,8 +974,7 @@ function draw() {
   const parallaxX = Math.sin(stageTime * .55) * 2;
   ctx.save();
   ctx.translate(shakeX, shakeY);
-  if (assets.arena.complete) ctx.drawImage(assets.arena, -8 + parallaxX, -5, 976, 550);
-  else { ctx.fillStyle = "#16263a"; ctx.fillRect(0, 0, 960, 540); }
+  drawStage(stageImages[stageChoice], parallaxX);
 
   const vignette = ctx.createLinearGradient(0, 0, 0, 540);
   vignette.addColorStop(0, "rgba(5,10,22,.12)");
@@ -850,8 +993,9 @@ function draw() {
   drawShadow(cpu);
   afterimages.forEach(drawAfterimage);
   fighters.slice().sort((a, b) => a.x - b.x).forEach(drawFighter);
-  projectiles.forEach(drawProjectile);
+  projectiles.forEach(p => { drawProjectileTrail(p); drawProjectile(p); });
   particles.forEach(drawParticle);
+  effects.forEach(drawEffect);
   ctx.restore();
 }
 
@@ -1039,6 +1183,21 @@ function drawMotionLines(f, motion) {
       ctx.stroke();
     }
     ctx.restore();
+    if (f.action === "kick") {
+      ctx.save();
+      ctx.translate(f.x + motion.dx, f.y - (f.lowAttack ? 28 : 88) * FIGHTER_SCALE);
+      ctx.scale(f.facing, 1);
+      ctx.globalAlpha = .5 * Math.sin(Math.PI * progress);
+      ctx.strokeStyle = powerColor(f.kind);
+      ctx.lineCap = "round";
+      for (const [radius, width] of [[64, 5], [76, 2]]) {
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, radius * FIGHTER_SCALE, radius * .72 * FIGHTER_SCALE, -.35, -1.35, .1 + progress * 1.5);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
   }
 
   if (f.action === "special" && progress > .1 && progress < .72) {
@@ -1050,6 +1209,22 @@ function drawMotionLines(f, motion) {
     ctx.beginPath();
     ctx.ellipse(f.x, f.y - 82 * FIGHTER_SCALE, radius * FIGHTER_SCALE, radius * .68 * FIGHTER_SCALE, 0, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.restore();
+    ctx.save();
+    ctx.translate(f.x + f.facing * 52 * FIGHTER_SCALE, f.y - 143 * FIGHTER_SCALE);
+    const charge = Math.sin(Math.PI * Math.min(1, progress / .72));
+    const glow = ctx.createRadialGradient(0, 0, 1, 0, 0, 32);
+    glow.addColorStop(0, powerColor(f.kind));
+    glow.addColorStop(1, "transparent");
+    ctx.fillStyle = glow;
+    ctx.globalAlpha = charge * .65;
+    ctx.fillRect(-32, -32, 64, 64);
+    ctx.fillStyle = "#fff6dc";
+    for (let i = 0; i < 4; i++) {
+      const angle = stageTime * 12 + i * Math.PI / 2;
+      const radius = 22 - charge * 10;
+      ctx.beginPath(); ctx.arc(Math.cos(angle) * radius, Math.sin(angle) * radius, 2, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.restore();
   }
   if (f.kind === "marechal" && f.action === "special" && progress > .12 && progress < .78) {
@@ -1186,6 +1361,28 @@ function drawFighter(f) {
   }
 }
 
+function drawProjectileTrail(p) {
+  if (p.trail.length < 2) return;
+  const x = lerp(p.prevX, p.x, renderAlpha);
+  const y = lerp(p.prevY, p.y, renderAlpha);
+  const tail = p.trail[p.trail.length - 1];
+  const tint = powerColor(p.owner.kind);
+  ctx.save();
+  const gradient = ctx.createLinearGradient(tail.x, tail.y, x, y);
+  gradient.addColorStop(0, "transparent");
+  gradient.addColorStop(1, tint);
+  ctx.strokeStyle = gradient;
+  ctx.lineCap = "round";
+  for (const [width, alpha] of [[23, .16], [10, .28], [3, .65]]) {
+    ctx.lineWidth = width * FIGHTER_SCALE;
+    ctx.globalAlpha = alpha;
+    ctx.beginPath(); ctx.moveTo(x, y);
+    p.trail.forEach(point => ctx.lineTo(point.x, point.y));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function drawProjectile(p) {
   ctx.save();
   ctx.translate(lerp(p.prevX, p.x, renderAlpha), lerp(p.prevY, p.y, renderAlpha));
@@ -1246,19 +1443,34 @@ function drawProjectile(p) {
       ctx.fillStyle = "#ffe876";
       ctx.fillRect(x - 4, y - 4, 8, 8);
     }
+  } else if (p.style === "meat") {
+    // Grilled strips use the same drawn style on every browser, including phones.
+    ctx.fillStyle = "#321713";
+    ctx.beginPath(); ctx.moveTo(-27, -10); ctx.lineTo(-10, -15); ctx.lineTo(28, -6); ctx.lineTo(25, 9); ctx.lineTo(7, 14); ctx.lineTo(-28, 6); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#bd673b";
+    ctx.beginPath(); ctx.moveTo(-24, -8); ctx.lineTo(-10, -11); ctx.lineTo(24, -4); ctx.lineTo(21, 6); ctx.lineTo(7, 10); ctx.lineTo(-24, 3); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "#542317"; ctx.lineWidth = 3;
+    for (let x = -16; x < 24; x += 9) { ctx.beginPath(); ctx.moveTo(x, -8); ctx.lineTo(x - 4, 7); ctx.stroke(); }
+    ctx.strokeStyle = "#efb673"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(-22, 3); ctx.lineTo(8, 9); ctx.lineTo(23, 4); ctx.stroke();
   } else {
-    ctx.font = "44px Arial";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.shadowColor = "#000";
-    ctx.shadowBlur = 3;
-    ctx.fillText(p.style === "meat" ? "🥩" : "🍾", 0, 0);
+    ctx.fillStyle = "#111d12";
+    ctx.fillRect(-6, -28, 12, 17);
+    ctx.beginPath(); ctx.moveTo(-6, -14); ctx.lineTo(-13, -6); ctx.lineTo(-13, 27); ctx.lineTo(13, 27); ctx.lineTo(13, -6); ctx.lineTo(6, -14); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = "#315b31"; ctx.fillRect(-9, -4, 18, 27);
+    ctx.fillStyle = "#ab8b49"; ctx.fillRect(-6, -29, 12, 6);
+    ctx.fillStyle = "#f1d9a0"; ctx.fillRect(-10, 3, 20, 13);
+    ctx.fillStyle = "#9f292c"; ctx.fillRect(-10, 3, 20, 3);
+    ctx.fillStyle = "#32442a"; ctx.fillRect(-7, 9, 14, 2); ctx.fillRect(-5, 12, 10, 2);
+    ctx.fillStyle = "#bad296"; ctx.fillRect(-7, -6, 2, 7);
   }
   ctx.restore();
 }
 
 function drawParticle(p) {
   ctx.save();
+  const x = lerp(p.prevX ?? p.x, p.x, renderAlpha);
+  const y = lerp(p.prevY ?? p.y, p.y, renderAlpha);
   ctx.globalAlpha = Math.min(1, p.life * 4);
   ctx.fillStyle = p.color;
   if (p.smoke) {
@@ -1266,10 +1478,14 @@ function drawParticle(p) {
     ctx.globalAlpha = Math.min(1, p.life * 4) * .72;
     const radius = p.size * (.6 + age * .8);
     ctx.beginPath();
-    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-    ctx.arc(p.x + radius * .6, p.y + radius * .2, radius * .68, 0, Math.PI * 2);
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.arc(x + radius * .6, y + radius * .2, radius * .68, 0, Math.PI * 2);
     ctx.fill();
-  } else ctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
+  } else if (p.spark) {
+    ctx.strokeStyle = p.color;
+    ctx.lineWidth = Math.max(1, p.size * .6);
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - p.vx * .025, y - p.vy * .025); ctx.stroke();
+  } else ctx.fillRect(x, y, p.size, p.size);
   ctx.restore();
 }
 
@@ -1280,6 +1496,9 @@ function updateHud() {
   ui.leftPower.style.width = `${player.power}%`;
   ui.rightPower.style.width = `${cpu.power}%`;
   ui.timer.textContent = String(Math.ceil(roundTime)).padStart(2, "0");
+  document.getElementById("roundLabel").textContent = ROUND_AUDIO[match.round].title + " · " + match.playerWins + " — " + match.cpuWins;
+  document.querySelectorAll("#leftRounds i").forEach((dot, index) => dot.classList.toggle("won", index < match.playerWins));
+  document.querySelectorAll("#rightRounds i").forEach((dot, index) => dot.classList.toggle("won", index < match.cpuWins));
   document.querySelector('[data-tap="special"]').classList.toggle("ready", player.power >= 35 && player.specialCooldown === 0);
   ui.abilityBtn.classList.toggle("ready", player.power >= 30 && player.specialCooldown === 0);
 }
@@ -1293,7 +1512,7 @@ function setPauseUI(paused) {
 }
 
 function togglePause() {
-  if (state === "playing" || state === "intro") {
+  if (state === "playing" || state === "intro" || state === "roundOver") {
     pauseFrom = state;
     state = "paused";
     stopRoundVoice();
@@ -1309,9 +1528,10 @@ function togglePause() {
     setPauseUI(false);
     ui.announcement.classList.remove("show");
     if (state === "intro") {
+      const timing = ROUND_AUDIO[match.round].timing;
       syncRoundVoice();
-      if (introElapsed >= INTRO.fight) announce("¡PELEA!", (INTRO.end - introElapsed) * 1000);
-      else if (introElapsed >= INTRO.voice) announce("ROUND 1", Math.max(0, INTRO.fight - introElapsed - .15) * 1000);
+      if (introElapsed >= timing.fight) announce("¡PELEA!", (timing.end - introElapsed) * 1000);
+      else if (introElapsed >= timing.title) announce(ROUND_AUDIO[match.round].title, Math.max(0, timing.fight - introElapsed - .15) * 1000);
     }
   }
 }
@@ -1325,7 +1545,7 @@ function loop(now) {
     accumulator -= STEP;
   }
   renderAlpha = state === "paused" ? 1 : accumulator / STEP;
-  if (["intro", "playing", "paused", "finished"].includes(state)) {
+  if (["intro", "playing", "paused", "roundOver", "finished"].includes(state)) {
     draw();
     updateHud();
   }
@@ -1337,15 +1557,16 @@ function ensureAudio() {
   if (!Audio) return;
   if (!audioCtx) audioCtx = new Audio();
   if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
-  loadRoundVoice();
+  [1, 2, 3].forEach(loadRoundVoice);
 }
 
-function loadRoundVoice() {
-  if (!audioCtx || roundVoiceLoading || roundVoiceBuffer || typeof fetch !== "function") return;
-  roundVoiceLoading = fetch("assets/round-one-fight.mp3")
+function loadRoundVoice(round = match.round) {
+  const cue = ROUND_AUDIO[round];
+  if (!audioCtx || !cue.src || cue.loading || cue.buffer || typeof fetch !== "function") return;
+  cue.loading = fetch(cue.src)
     .then(response => { if (!response.ok) throw new Error("Round audio unavailable"); return response.arrayBuffer(); })
     .then(bytes => audioCtx.decodeAudioData(bytes))
-    .then(buffer => { roundVoiceBuffer = buffer; syncRoundVoice(); })
+    .then(buffer => { cue.buffer = buffer; syncRoundVoice(); })
     .catch(() => { /* Keep the round playable with the synthesized cue if loading fails. */ });
 }
 
@@ -1360,11 +1581,12 @@ function stopRoundVoice() {
 }
 
 function syncRoundVoice() {
-  if (state !== "intro" || muted || !audioCtx || audioCtx.state !== "running" || !roundVoiceBuffer || roundVoiceStarted) return;
-  const offset = introElapsed - INTRO.voice;
-  if (offset < 0 || offset >= roundVoiceBuffer.duration) return;
+  const cue = ROUND_AUDIO[match.round];
+  if (state !== "intro" || muted || !audioCtx || audioCtx.state !== "running" || !cue.src || !cue.buffer || roundVoiceStarted) return;
+  const offset = introElapsed - cue.timing.voice;
+  if (offset < 0 || offset >= cue.buffer.duration) return;
   const source = audioCtx.createBufferSource();
-  source.buffer = roundVoiceBuffer;
+  source.buffer = cue.buffer;
   source.connect(audioCtx.destination);
   source.onended = () => { source.disconnect(); if (roundVoiceSource === source) roundVoiceSource = null; };
   source.start(0, offset);
@@ -1421,17 +1643,20 @@ document.querySelectorAll("[data-pick]").forEach(btn => {
   btn.addEventListener("dblclick", () => {
     chooseFighter(btn.dataset.pick, false);
     sfx("confirm");
-    startGame(playerChoice);
+    openStageSelection();
   });
 });
 
 ui.confirmBtn.addEventListener("click", () => {
   requestMobileLandscape();
   sfx("confirm");
-  startGame(playerChoice);
+  openStageSelection();
 });
 
-document.getElementById("rematchBtn").addEventListener("click", () => startGame(playerChoice));
+document.querySelectorAll("[data-stage]").forEach(button => button.addEventListener("click", () => chooseStage(button.dataset.stage)));
+document.getElementById("stageBackBtn").addEventListener("click", openSelection);
+document.getElementById("stageConfirmBtn").addEventListener("click", () => { requestMobileLandscape(); startGame(playerChoice); });
+document.getElementById("rematchBtn").addEventListener("click", () => startGame(playerChoice, cpu.kind));
 document.getElementById("selectBtn").addEventListener("click", () => {
   openSelection();
 });
@@ -1479,7 +1704,16 @@ window.addEventListener("keydown", event => {
       const direction = code === "KeyA" || code === "ArrowLeft" ? -1 : 1;
       chooseFighter(roster[(roster.indexOf(playerChoice) + direction + roster.length) % roster.length]);
     }
+    if (["Enter", "Space", "KeyJ"].includes(code)) openStageSelection();
+    return;
+  }
+  if (state === "stage") {
+    if (["KeyA", "KeyD", "ArrowLeft", "ArrowRight"].includes(code)) {
+      const direction = code === "KeyA" || code === "ArrowLeft" ? -1 : 1;
+      chooseStage(stageRoster[(stageRoster.indexOf(stageChoice) + direction + stageRoster.length) % stageRoster.length]);
+    }
     if (["Enter", "Space", "KeyJ"].includes(code)) startGame(playerChoice);
+    if (code === "Escape") openSelection();
     return;
   }
   if (code === "Space" || code === "Escape") { togglePause(); return; }
@@ -1501,7 +1735,7 @@ window.addEventListener("keyup", event => {
 
 function pauseOnLeave() {
   clearHeld();
-  if (state === "playing" || state === "intro") togglePause();
+  if (state === "playing" || state === "intro" || state === "roundOver") togglePause();
 }
 window.addEventListener("blur", pauseOnLeave);
 document.addEventListener("visibilitychange", () => {

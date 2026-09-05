@@ -384,6 +384,26 @@ button { font: inherit; }
 }
 #game { display: block; width: 100%; height: 100%; image-rendering: auto; }
 
+.stage-screen { --stage-unit: min(1vw, 1.77778dvh); background: #071426; }
+.stage-preview, .stage-shade { position: absolute; inset: 0; width: 100%; height: 100%; }
+.stage-preview { object-fit: cover; object-position: center 60%; }
+.stage-shade { background: linear-gradient(90deg, #030b1bb8, transparent 70%), linear-gradient(0deg, #030a1af2, #030a1a14 62%, #030a1a91); }
+.stage-screen .select-header h2 { font-size: clamp(15px, calc(var(--stage-unit) * 3), 44px); }
+.stage-info { position: absolute; left: 5%; top: 23%; right: 5%; text-shadow: 2px 3px #040716; }
+.stage-info p { margin: .5em 0; font: 800 clamp(9px, calc(var(--stage-unit) * 1.4), 19px) Arial, sans-serif; }
+.stage-info h3 { margin: .15em 0; max-width: 85%; color: #ffdb40; font-size: clamp(18px, calc(var(--stage-unit) * 4), 58px); font-style: italic; }
+.stage-choices { position: absolute; top: 56%; left: 5%; right: 5%; height: 24%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.5%; }
+.stage-card { position: relative; min-width: 0; padding: 0; overflow: hidden; border: 2px solid #9fabc2; background: #07162b; color: #fff; cursor: pointer; box-shadow: 3px 4px #020511; transition: border-color .15s, transform .15s; }
+.stage-card img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 60%; }
+.stage-card strong { position: absolute; inset: auto 0 0; padding: .6em .25em; background: #030a1ddc; font-size: clamp(8px, calc(var(--stage-unit) * 1.15), 17px); letter-spacing: .035em; }
+.stage-card.selected { border-color: #ffdb40; transform: translateY(-4%); box-shadow: 0 0 0 2px #fcaa1a, 0 0 20px #f9b12754; }
+.stage-card.selected strong { color: #ffdf57; }
+.stage-card:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
+.stage-actions { position: absolute; top: 84%; left: 5%; right: 5%; display: flex; justify-content: space-between; }
+.stage-actions .arcade-btn { font-size: clamp(9px, calc(var(--stage-unit) * 1.4), 20px); }
+.stage-screen .select-help { font-size: clamp(7px, calc(var(--stage-unit) * .9), 13px); bottom: 1.5%; }
+.phone-portrait .stage-screen { --stage-unit: min(1dvh, 1.77778dvw); }
+
 .hud {
   position: absolute;
   z-index: 8;
@@ -395,7 +415,7 @@ button { font: inherit; }
   filter: drop-shadow(.3vw .3vw 0 #000);
 }
 
-.hud-side { min-width: 0; }
+.hud-side { position: relative; min-width: 0; }
 .name-row { display: flex; justify-content: space-between; gap: 5%; margin-bottom: .5%; font-size: clamp(.5rem, 1.7vw, 1.55rem); font-style: italic; letter-spacing: .06em; }
 .name-row span { color: var(--gold); font-size: .7em; }
 .left-hud .name-row { padding: 0 5% 0 1.5%; }
@@ -406,6 +426,12 @@ button { font: inherit; }
 .health-shell::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(rgba(255,255,255,.32), transparent 45%, rgba(0,0,0,.16)); }
 .power-shell { width: 62%; height: clamp(4px, .85vw, 10px); margin-top: 1%; border-width: 1px; }
 .right-hud .power-shell { margin-left: auto; }
+.round-wins { position: absolute; right: 1%; bottom: 0; display: flex; gap: .4em; font-size: clamp(7px, 1vw, 13px); }
+.right-hud .round-wins { right: auto; left: 1%; flex-direction: row-reverse; }
+.round-wins i { width: .95em; height: .95em; border: 1px solid #fff0a8; background: #111c2d; transform: rotate(45deg); }
+.round-wins i.won { background: #ffda35; box-shadow: 0 0 .7em #ff9d16; }
+.round-label { position: absolute; z-index: 9; top: 18%; left: 50%; transform: translateX(-50%); padding: .35em .65em; color: #ffe58b; background: #071020bd; font: 900 clamp(8px, 1vw, 13px) Arial, sans-serif; letter-spacing: .08em; white-space: nowrap; }
+.round-notice { position: absolute; z-index: 18; top: 59%; left: 10%; width: 80%; margin: 0; text-align: center; color: #fff1bb; font: 900 clamp(12px, 2vw, 25px) Arial, sans-serif; text-shadow: 2px 2px #000; }
 .health-fill { width: 100%; height: 100%; background: linear-gradient(90deg, #17d452 0 62%, #f2e536 78%, #ee2937); transition: width .28s cubic-bezier(.2,.8,.2,1); }
 .right-hud .health-fill { margin-left: auto; background: linear-gradient(270deg, #17d452 0 62%, #f2e536 78%, #ee2937); }
 .power-fill { width: 35%; height: 100%; background: linear-gradient(90deg, #0b8be8, #90e8ff); box-shadow: 0 0 .8vw #36baff; transition: width .22s cubic-bezier(.2,.8,.2,1); }

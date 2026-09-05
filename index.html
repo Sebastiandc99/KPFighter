@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#020716">
   <meta name="description" content="KP Fighter, juego arcade de lucha para computadora y celular.">
   <title>KP FIGHTER</title>
-  <link rel="stylesheet" href="style.css?v=20260906a">
+  <link rel="stylesheet" href="style.css?v=20260906b">
 </head>
 <body>
   <main id="arcade" class="arcade" aria-label="KP Fighter">
@@ -74,10 +74,41 @@
             <strong>MARECHAL</strong>
           </button>
         </div>
-        <button id="confirmBtn" class="confirm-btn" type="button">FIGHT!</button>
+        <button id="confirmBtn" class="confirm-btn" type="button">ELEGIR ESCENARIO</button>
       </div>
 
       <p class="select-help">← → ELEGIR · ENTER CONFIRMAR</p>
+    </section>
+
+    <section id="stageScreen" class="screen stage-screen" aria-labelledby="stageTitle">
+      <img id="stagePreview" class="stage-preview" src="assets/arena.jpg" alt="">
+      <div class="stage-shade" aria-hidden="true"></div>
+      <header class="select-header">
+        <span class="player-one">1P</span>
+        <h2 id="stageTitle">ELIGE EL ESCENARIO</h2>
+        <span class="select-clock">03</span>
+      </header>
+      <div class="stage-info" aria-live="polite">
+        <p id="stageFighter" class="selection-kicker"></p>
+        <h3 id="stageName">PATIO ARCADE</h3>
+        <p id="stageDescription">El escenario original de KP FIGHTER.</p>
+      </div>
+      <div class="stage-choices" role="group" aria-label="Escenarios disponibles">
+        <button type="button" class="stage-card selected" data-stage="arcade" aria-pressed="true">
+          <img src="assets/arena.jpg" alt="Patio arcade"><strong>PATIO ARCADE</strong>
+        </button>
+        <button type="button" class="stage-card" data-stage="mine" aria-pressed="false">
+          <img src="assets/stage-mine.webp" alt="Galería subterránea iluminada"><strong>GALERÍA SUBTERRÁNEA</strong>
+        </button>
+        <button type="button" class="stage-card" data-stage="newmont" aria-pressed="false">
+          <img src="assets/stage-newmont.webp" alt="Planta minera de Newmont"><strong>PLANTA NEWMONT</strong>
+        </button>
+      </div>
+      <div class="stage-actions">
+        <button id="stageBackBtn" type="button" class="arcade-btn">VOLVER</button>
+        <button id="stageConfirmBtn" type="button" class="arcade-btn primary">¡A PELEAR!</button>
+      </div>
+      <p class="select-help">← → ELEGIR · ENTER PELEAR · ESC VOLVER</p>
     </section>
 
     <section id="gameScreen" class="screen fight-screen" aria-label="Combate">
@@ -88,14 +119,18 @@
           <div class="name-row"><strong id="leftName">SERGIO</strong><span>1P</span></div>
           <div class="health-shell"><div id="leftHealth" class="health-fill"></div></div>
           <div class="power-shell"><div id="leftPower" class="power-fill"></div></div>
+          <div id="leftRounds" class="round-wins"><i></i><i></i></div>
         </div>
         <div id="timer" class="timer">60</div>
         <div class="hud-side right-hud">
           <div class="name-row"><span>CPU</span><strong id="rightName">BLOTTA</strong></div>
           <div class="health-shell"><div id="rightHealth" class="health-fill"></div></div>
           <div class="power-shell"><div id="rightPower" class="power-fill"></div></div>
+          <div id="rightRounds" class="round-wins"><i></i><i></i></div>
         </div>
       </div>
+      <div id="roundLabel" class="round-label">ROUND 1 · AL MEJOR DE 3</div>
+      <p id="roundNotice" class="round-notice" hidden></p>
 
       <button id="soundBtn" class="corner-btn sound-btn" type="button" aria-label="Desactivar sonido">♪</button>
       <button id="pauseBtn" class="corner-btn pause-btn" type="button" aria-label="Pausar juego">PAUSA</button>
@@ -145,6 +180,6 @@
     <div class="scanlines" aria-hidden="true"></div>
   </main>
 
-  <script src="game.js?v=20260906a"></script>
+  <script src="game.js?v=20260906b"></script>
 </body>
 </html>

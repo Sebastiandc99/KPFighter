@@ -29,6 +29,9 @@ function game() {
   }
   const picks = ["sergio", "blotta", "tunki", "marechal"].map(kind => node("pick-" + kind, { pick: kind }));
   const portraits = ["sergio", "blotta", "tunki", "marechal"].map(kind => node("portrait-" + kind, { portrait: kind }));
+  const stages = ["arcade", "mine", "newmont"].map(stage => node("stage-" + stage, { stage }));
+  const leftRounds = [0, 1].map(i => node("left-round-" + i));
+  const rightRounds = [0, 1].map(i => node("right-round-" + i));
   const holds = ["left", "right", "down", "guard"].map(hold => node("hold-" + hold, { hold }));
   const taps = ["jump", "punch", "kick", "special", "ability"].map(tap => node("tap-" + tap, { tap }));
   const win = node("window");
@@ -40,6 +43,7 @@ function game() {
     querySelector: selector => selector === '[data-tap="special"]' ? taps[3] : node(selector),
     querySelectorAll: selector => ({
       "[data-pick]": picks, "[data-portrait]": portraits, "[data-hold]": holds, "[data-tap]": taps,
+      "[data-stage]": stages, "#leftRounds i": leftRounds, "#rightRounds i": rightRounds,
       "[data-hold].active": holds.filter(n => n.classList.contains("active"))
     }[selector] || [])
   });
@@ -67,7 +71,7 @@ test("neutral jump has its own pose and never inflicts a kick", () => {
   assert.equal(g.run("player.action"), "idle");
   assert.equal(g.run("poseFor(player)"), 10);
   assert.ok(g.run("player.vy") < 0);
-  g.tick(.8);
+  g.tick(1);
   assert.equal(g.run("cpu.health"), 100);
   assert.equal(g.run("player.grounded"), true);
   g.tick(.2);
@@ -200,9 +204,9 @@ test("an input buffered near recovery executes and damage stops at round end", (
   g.tick(.13);
   assert.equal(g.run("player.action"), "kick");
   g.run('cpu.health = 5; hit(cpu, 10, 120, 0, player);');
-  assert.equal(g.run("state"), "finished");
+  assert.equal(g.run("state"), "roundOver");
   g.tick(1);
-  assert.equal(g.nodes.get("resultPanel").hidden, false);
+  assert.equal(g.nodes.get("resultPanel").hidden, true);
   const hp = g.run("player.health");
   g.run("hit(player, 20, -170, 0, cpu)");
   assert.equal(g.run("player.health"), hp);
@@ -214,8 +218,8 @@ test("all character matchups finish simulated fights with AI and rendering enabl
    for (const rival of ["sergio", "blotta", "tunki", "marechal"].filter(other => other !== kind)) {
     const g = game();
     g.run('startGame("' + kind + '"); state = "playing"; aiEnabled = true;');
-    g.run('cpu.kind = "' + rival + '";');
-    for (let frame = 1; frame <= 61 * 60; frame++) {
+    g.run('cpu.kind = match.cpuKind = "' + rival + '";');
+    for (let frame = 1; frame <= 195 * 60 && g.run("state") !== "finished"; frame++) {
       if (frame % 17 === 0) g.key("KeyJ");
       if (frame % 47 === 0) g.key("KeyK");
       if (frame % 139 === 0) g.key("KeyL");
@@ -224,7 +228,7 @@ test("all character matchups finish simulated fights with AI and rendering enabl
     }
     assert.equal(g.run("state"), "finished");
     assert.ok(g.run("fighters.every(f => Number.isFinite(f.x) && Number.isFinite(f.y) && f.health >= 0 && f.health <= 100)"));
-    assert.ok(g.run("particles.length < 100 && afterimages.length < 20"));
+    assert.ok(g.run("particles.length <= 220 && afterimages.length < 20 && effects.length <= 48"));
    }
   }
 });
@@ -236,6 +240,8 @@ test("La Tunki is selectable with keyboard and appears in the expanded roster", 
   assert.equal(g.run("playerChoice"), "tunki");
   assert.equal(g.nodes.get("selectionName").textContent, "LA TUNKI");
   assert.ok(g.nodes.get("pick-tunki").classList.contains("selected"));
+  g.key("Enter");
+  assert.equal(g.run("state"), "stage");
   g.key("Enter");
   assert.equal(g.run("player.kind"), "tunki");
   assert.notEqual(g.run("cpu.kind"), "tunki");
@@ -260,7 +266,7 @@ test("Tunki's neutral jump does no damage; deliberate slam dives and hits once",
   const g = game();
   g.run('startGame("tunki"); state = "playing"; player.x = 300; cpu.x = 410;');
   g.key("KeyW");
-  g.tick(.8);
+  g.tick(1);
   assert.equal(g.run("cpu.health"), 100);
   g.run("player.x = 300; cpu.x = 410;");
   g.key("KeyH");
@@ -269,7 +275,7 @@ test("Tunki's neutral jump does no damage; deliberate slam dives and hits once",
   assert.equal(g.run("player.action"), "slam");
   g.tick(.2);
   assert.equal(g.run("player.grounded"), false);
-  g.tick(.9);
+  g.tick(1.1);
   assert.equal(g.run("cpu.health"), 82);
   assert.equal(g.run("player.grounded"), true);
   assert.equal(g.run("player.action"), "idle");
@@ -336,13 +342,14 @@ test("Marechal can be selected with keyboard or touch and uses basic controls", 
   assert.equal(g.run("playerChoice"), "marechal");
   assert.equal(g.nodes.get("selectionName").textContent, "MARECHAL");
   g.key("Enter");
+  g.key("Enter");
   assert.equal(g.run("player.kind"), "marechal");
   assert.notEqual(g.run("cpu.kind"), "marechal");
   assert.equal(g.nodes.get("abilityBtn").hidden, true);
   g.run('state = "playing";');
   g.key("KeyW");
   assert.equal(g.run("poseFor(player)"), 10);
-  g.tick(.85);
+  g.tick(1);
   assert.equal(g.run("cpu.health"), 100);
   g.key("KeyS");
   assert.equal(g.run("poseFor(player)"), 8);
@@ -351,6 +358,7 @@ test("Marechal can be selected with keyboard or touch and uses basic controls", 
   g.run('openSelection(); chooseFighter("sergio", false);');
   g.nodes.get("pick-marechal").listeners.click();
   g.nodes.get("confirmBtn").listeners.click();
+  g.nodes.get("stageConfirmBtn").listeners.click();
   assert.equal(g.run("player.kind"), "marechal");
 });
 
@@ -438,13 +446,13 @@ test("round voice starts once per round, pauses, resumes from its offset and obe
     audioCtx = { state: "running", destination: {}, createBufferSource() {
       return {connect() {}, disconnect() {}, start(when, offset) {voiceLog.push({event: "start", offset});}, stop() {voiceLog.push({event: "stop"});}};
     }};
-    roundVoiceBuffer = {duration: 4.272};
+    ROUND_AUDIO[1].buffer = {duration: 4.272};
     muted = false;
     startGame("blotta");
   `);
-  g.tick(1.3);
+  g.tick(1.05);
   assert.equal(g.run("voiceLog.length"), 0);
-  g.tick(.1);
+  g.tick(.35);
   assert.equal(g.run('voiceLog.filter(e => e.event === "start").length'), 1);
   assert.equal(g.nodes.get("announcement").textContent, "ROUND 1");
   g.tick(.3);
@@ -469,4 +477,186 @@ test("round voice starts once per round, pauses, resumes from its offset and obe
   g.tick(1.4);
   assert.equal(g.run('voiceLog.filter(e => e.event === "start").length'), starts + 1);
   assert.ok(g.run("voiceLog.at(-1).offset < STEP * 1.1"));
+});
+
+test("stage selection follows the fighter screen and supports keyboard, touch and back", () => {
+  const g = game();
+  g.run('openSelection(); chooseFighter("marechal", false);');
+  g.key("Enter");
+  assert.equal(g.run("state"), "stage");
+  assert.equal(g.nodes.get("selectScreen").classList.contains("active"), false);
+  assert.ok(g.nodes.get("stageScreen").classList.contains("active"));
+  g.key("ArrowRight");
+  assert.equal(g.run("stageChoice"), "mine");
+  g.key("Escape");
+  assert.equal(g.run("state"), "select");
+  assert.equal(g.run("playerChoice"), "marechal");
+  g.nodes.get("confirmBtn").listeners.click();
+  g.nodes.get("stage-newmont").listeners.click();
+  assert.equal(g.nodes.get("stagePreview").src, "assets/stage-newmont.webp");
+  g.nodes.get("stageConfirmBtn").listeners.click();
+  assert.equal(g.run("state"), "intro");
+  assert.equal(g.run("player.kind"), "marechal");
+  assert.equal(g.run("stageChoice"), "newmont");
+  assert.equal(g.nodes.get("stageScreen").classList.contains("active"), false);
+  assert.ok(g.nodes.get("gameScreen").classList.contains("active"));
+});
+
+test("two wins end the match 2–0 and rematch retains opponents and stage", () => {
+  const g = game();
+  g.run('chooseStage("mine", false); startGame("sergio", "blotta"); state = "playing";');
+  g.key("KeyD");
+  g.run('cpu.health = 1; hit(cpu, 10, 100, 0, player);');
+  assert.equal(g.run("state"), "roundOver");
+  assert.equal(g.run("match.playerWins"), 1);
+  assert.ok(g.nodes.get("left-round-0").classList.contains("won"));
+  g.key("KeyJ");
+  assert.equal(g.run("player.queuedAction"), null);
+  g.tick(2.7);
+  assert.equal(g.run("state"), "intro");
+  assert.equal(g.run("match.round"), 2);
+  assert.equal(g.run("cpu.kind"), "blotta");
+  assert.equal(g.run("stageChoice"), "mine");
+  assert.equal(g.run("player.health + cpu.health"), 200);
+  assert.equal(g.run("player.power + cpu.power"), 80);
+  assert.equal(g.run("roundTime"), 60);
+  assert.equal(g.run("player.x"), 235);
+  assert.equal(g.run("cpu.x"), 725);
+  assert.equal(g.run("held.right"), false);
+  assert.equal(g.run("projectiles.length + effects.length + afterimages.length"), 0);
+  g.tick(g.run("ROUND_AUDIO[match.round].timing.end") + .05);
+  g.run('cpu.health = 1; hit(cpu, 10, 100, 0, player);');
+  assert.equal(g.run("state"), "finished");
+  assert.equal(g.run("match.playerWins"), 2);
+  g.tick(3);
+  assert.equal(g.run("match.round"), 2);
+  assert.equal(g.nodes.get("resultPanel").hidden, false);
+  g.nodes.get("rematchBtn").listeners.click();
+  assert.equal(g.run("match.round"), 1);
+  assert.equal(g.run("match.playerWins + match.cpuWins"), 0);
+  assert.equal(g.run("cpu.kind"), "blotta");
+  assert.equal(g.run("stageChoice"), "mine");
+});
+
+test("a split score reaches round three and the CPU can win the match 2–1", () => {
+  const g = game();
+  g.run('finishRound(player, "K.O.");');
+  g.tick(5.5);
+  g.run('finishRound(cpu, "K.O.");');
+  assert.equal(g.run("match.playerWins"), 1);
+  assert.equal(g.run("match.cpuWins"), 1);
+  g.tick(2.7);
+  assert.equal(g.run("match.round"), 3);
+  g.tick(g.run("ROUND_AUDIO[match.round].timing.end") + .05);
+  g.run('finishRound(cpu, "K.O.");');
+  assert.equal(g.run("state"), "finished");
+  assert.equal(g.run("match.cpuWins"), 2);
+  g.tick(3);
+  assert.equal(g.run("match.round"), 3);
+});
+
+test("timeout awards the healthier fighter and ties replay without awarding a win", () => {
+  const g = game();
+  g.run("roundTime = STEP; player.health = 40; cpu.health = 25;");
+  g.tick(1 / 120);
+  assert.equal(g.run("match.playerWins"), 1);
+  g.tick(5.5);
+  g.run("roundTime = STEP; player.health = cpu.health = 40;");
+  g.tick(1 / 120);
+  assert.equal(g.run("match.playerWins + match.cpuWins"), 1);
+  assert.equal(g.run("match.repeat"), true);
+  g.tick(2.7);
+  assert.equal(g.run("match.round"), 2);
+  assert.equal(g.run("player.health + cpu.health"), 200);
+});
+
+test("simultaneous lethal hits draw the round and pause freezes the interval", () => {
+  const g = game();
+  g.run('player.x = 300; cpu.x = 355; player.health = cpu.health = 5; attack(player, "punch"); attack(cpu, "punch");');
+  g.tick(.12);
+  assert.equal(g.run("player.health + cpu.health"), 0);
+  assert.equal(g.run("match.playerWins + match.cpuWins"), 0);
+  assert.equal(g.run("state"), "roundOver");
+  g.key("Space");
+  const snapshot = g.run("JSON.stringify([resultElapsed, match, effects])");
+  g.tick(4);
+  assert.equal(g.run("JSON.stringify([resultElapsed, match, effects])"), snapshot);
+  g.key("Space");
+  g.tick(2.7);
+  assert.equal(g.run("state"), "intro");
+  assert.equal(g.run("match.round"), 1);
+});
+
+test("all fighters jump higher, remain in view and land without dealing automatic damage", () => {
+  for (const kind of ["sergio", "blotta", "tunki", "marechal"]) {
+    const g = game();
+    g.run('startGame("' + kind + '"); state = "playing"; var minY = FLOOR;');
+    g.key("KeyW");
+    g.run("for (let i=0; i<120; i++) { update(STEP); minY = Math.min(minY, player.y); }");
+    const ratio = g.run("(FLOOR - minY) / (stats[player.kind].jump ** 2 / 3300)");
+    assert.ok(ratio > 1.5 && ratio < 1.6, kind + ": " + ratio);
+    assert.ok(g.run("minY - stats[player.kind].height * FIGHTER_SCALE > 70"));
+    assert.equal(g.run("player.grounded"), true);
+    assert.equal(g.run("cpu.health"), 100);
+  }
+});
+
+test("each round uses its own recording and the decider displays FINAL ROUND", () => {
+  const g = game();
+  g.run(`
+    var voices = [];
+    sfx = () => {};
+    audioCtx = {state: "running", destination: {}, createBufferSource() {
+      return {connect() {}, disconnect() {}, start() {voices.push(this.buffer.id);}, stop() {}};
+    }};
+    muted = false;
+    ROUND_AUDIO[1].buffer = {duration: 2.691, id: 1};
+    ROUND_AUDIO[2].buffer = {duration: 2.377, id: 2};
+    ROUND_AUDIO[3].buffer = {duration: 2.586, id: 3};
+    startGame("sergio");
+  `);
+  g.tick(4);
+  assert.equal(g.run("voices.join(',')"), "1");
+  g.run('finishRound(player, "K.O.");');
+  g.tick(5.5);
+  assert.equal(g.run("voices.join(',')"), "1,2");
+  g.run('finishRound(cpu, "K.O.");');
+  g.tick(3.3);
+  assert.equal(g.run("match.round"), 3);
+  assert.equal(g.run("voices.join(',')"), "1,2,3");
+  assert.equal(g.nodes.get("announcement").textContent, "FINAL ROUND");
+  assert.match(g.nodes.get("roundLabel").textContent, /^FINAL ROUND/);
+});
+
+test("round titles and FIGHT follow each recording's speech cues, including after pause", () => {
+  for (const round of [1, 2, 3]) {
+    const g = game();
+    g.run("match.round = " + round + "; startRound();");
+    const timing = g.run("ROUND_AUDIO[match.round].timing");
+    const title = g.run("ROUND_AUDIO[match.round].title");
+    g.tick(timing.title - .02);
+    assert.equal(g.nodes.get("announcement").classList.contains("show"), false);
+    g.tick(.04);
+    assert.equal(g.nodes.get("announcement").textContent, title);
+    g.key("Space");
+    g.tick(.5);
+    g.key("Space");
+    assert.equal(g.nodes.get("announcement").textContent, title);
+    g.tick(timing.fight - g.run("introElapsed") - .02);
+    assert.notEqual(g.nodes.get("announcement").textContent, "¡PELEA!");
+    g.tick(.04);
+    assert.equal(g.nodes.get("announcement").textContent, "¡PELEA!");
+    assert.equal(g.run("state"), "intro");
+    g.tick(timing.end - g.run("introElapsed") + .02);
+    assert.equal(g.run("state"), "playing");
+  }
+});
+
+test("automatic round changes preserve the render clock within a fixed-step frame", () => {
+  const g = game();
+  g.run('finishRound(player, "K.O."); resultElapsed = 2.645; loop(20);');
+  assert.equal(g.run("state"), "intro");
+  assert.equal(g.run("match.round"), 2);
+  assert.ok(g.run("accumulator >= 0 && accumulator < STEP"));
+  assert.ok(g.run("renderAlpha >= 0 && renderAlpha <= 1"));
 });
