@@ -728,3 +728,107 @@ kbd { display: inline-grid; min-width: 1.5em; place-items: center; margin: 0 .12
 .phone-portrait .touch-controls { left: 1.8%; right: 1.8%; bottom: 2.4%; }
 .phone-portrait .announcement { font-size: clamp(2rem, 8.5dvh, 7.6rem); }
 .phone-portrait .pause-btn { right: 7%; }
+
+/* Menús arcade y cierre del combate. */
+.arcade { container-type: size; }
+.menu-screen { color: #fff5d1; background: radial-gradient(ellipse at 50% 20%, #13365e, #040b1d 70%); }
+.menu-card { position: absolute; inset: 9% 8%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5%; text-align: center; }
+.menu-card h2, .ranking-header h2 { margin: 0; font-size: clamp(20px, 4cqw, 45px); color: var(--gold); font-style: italic; text-shadow: 3px 3px #ab1d2b, 5px 5px #000; }
+.menu-kicker { margin: 0; font-size: clamp(12px, 1.5cqw, 18px); letter-spacing: .2em; color: #b8ddff; }
+.mode-options { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; width: 100%; margin: 2% 0; }
+.mode-option { padding: 7% 3%; border: 3px solid #7f96b0; color: white; background: #0a1731; cursor: pointer; box-shadow: 5px 5px #0008; }
+.mode-option.selected, .mode-option:focus-visible { border-color: #ffdc40; background: #17345e; }
+.mode-option strong { display: block; color: #ffe16a; font-size: clamp(18px, 3.2cqw, 40px); }
+.mode-option span { display: block; margin-top: 9px; font: 700 clamp(12px, 1.5cqw, 18px) Arial, sans-serif; }
+.mode-note { margin: 0; font: 700 clamp(12px, 1.4cqw, 17px) Arial, sans-serif; }
+.title-ranking { display: block; margin: 5% auto 0; }
+.fighter-back { position: absolute; left: 3%; bottom: 3%; z-index: 12; }
+.selecting-p2 .player-one, .selecting-p2 .selection-kicker { color: #67dcff; }
+.selecting-p2 .portrait.selected, .selecting-p2 .choice-tile.selected { border-color: #67dcff; }
+.score-line { position: absolute; top: calc(100% + 5px); left: 1.5%; color: #bdd4ed; font: 800 clamp(12px, 1.4cqw, 17px) Arial, sans-serif; letter-spacing: .07em; text-shadow: 1px 2px #000; }
+.score-line strong { color: #fff5bd; font-variant-numeric: tabular-nums; }
+.right-hud .score-line { left: auto; right: 1.5%; }
+.round-label { top: 21%; }
+.corner-btn { top: 23%; }
+.pause-menu { position: absolute; z-index: 35; inset: 0; display: grid; place-items: center; background: #0107189c; }
+.pause-card { display: flex; flex-direction: column; align-items: stretch; gap: 14px; width: min(430px, 76%); padding: 24px; border: 3px solid #ffe071; background: #091b38; text-align: center; box-shadow: 8px 8px #0009; }
+.pause-card h2 { margin: 0 0 6px; color: #ffe071; font-size: clamp(24px, 4cqw, 46px); }
+.pause-card .arcade-btn, .menu-card .arcade-btn, .ranking-actions .arcade-btn { font-size: clamp(12px, 1.4cqw, 18px); min-height: 42px; }
+#pauseHelp { margin: 0; font: 700 12px Arial,sans-serif; color: #b8d6f5; }
+.paused *, .paused *::before, .paused *::after { animation-play-state: paused !important; }
+.paused .health-fill, .paused .power-fill { transition: none; }
+.result-panel { gap: 12px; overflow: auto; }
+.result-panel #resultKicker { font-size: clamp(23px, 5cqw, 58px); }
+.result-panel #resultTitle { margin: 0; font-size: clamp(20px, 3.4cqw, 40px); }
+.result-panel .final-score { color: #d7edff; font: 800 clamp(14px, 2cqw, 24px) Arial,sans-serif; text-shadow: 2px 2px #000; }
+.winner-form { display: grid; gap: 10px; width: min(500px, 90cqw); margin: 5px auto 0; font: 800 14px Arial,sans-serif; }
+.name-entry { display: flex; gap: 10px; }
+#winnerName { min-width: 0; width: 100%; min-height: 44px; padding: 9px 12px; border: 2px solid #a0cee7; border-radius: 2px; background: #edf7ff; color: #081426; font: 700 18px Arial,sans-serif; user-select: text; -webkit-user-select: text; touch-action: manipulation; }
+.winner-form .arcade-btn { font-size: 14px; }
+.result-panel .form-message, .result-panel .cpu-result-note { max-width: 520px; font: 700 14px/1.35 Arial,sans-serif; color: #ffdfa8; text-shadow: none; }
+.ranking-screen { padding: 3% 5%; display: none; }
+.ranking-screen.active { display: flex; flex-direction: column; gap: 12px; }
+.ranking-header { text-align: center; flex: 0 0 auto; }
+.ranking-header h2 { font-size: clamp(20px, 3.4cqw, 40px); margin: 5px 0; }
+#rankingStatus { margin: 5px 0 0; font: 700 clamp(12px, 1.5cqw, 17px)/1.25 Arial,sans-serif; color: #bcd9f4; }
+.ranking-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; border: 2px solid #7798bb; background: #08162c; }
+.ranking-scroll table { width: 100%; border-collapse: collapse; font: 700 clamp(14px, 1.6cqw, 19px) Arial,sans-serif; }
+.ranking-scroll th { position: sticky; top: 0; background: #173658; color: #ffe078; text-align: left; }
+.ranking-scroll td, .ranking-scroll th { padding: 10px 12px; border-bottom: 1px solid #294262; overflow-wrap: anywhere; }
+.ranking-scroll td:nth-child(3), .ranking-scroll th:nth-child(3) { text-align: right; font-variant-numeric: tabular-nums; }
+.new-record { background: #5b4217; color: #fff4a8; }
+.ranking-actions { flex: 0 0 auto; display: flex; justify-content: space-between; gap: 10px; }
+.control-owner { display: none; }
+.p2-controls { display: none; }
+.versus-help { display: none; }
+.versus-mode .desktop-help { gap: 8px; }
+.versus-mode .solo-help { display: none; }
+.versus-mode .versus-help { display: inline; }
+.two-touch .desktop-help { display: none; }
+/* Dedicated lower control area for two people, with no overlap over fighters. */
+.two-touch .fight-screen #game { position: absolute; width: 78%; height: 78%; left: 11%; top: 0; }
+.two-touch .fight-screen .hud { left: 11%; right: 11%; top: 1.5%; }
+.two-touch .health-shell { height: clamp(14px, 4cqh, 22px); }
+.two-touch .name-row { font-size: clamp(12px, 1.8cqw, 18px); }
+.two-touch .score-line { font-size: 12px; top: calc(100% + 3px); }
+.two-touch .round-label { top: 23%; font-size: 10px; }
+.two-touch .corner-btn { top: 2%; }
+.two-touch .sound-btn { right: 2%; width: 36px; }
+.two-touch .pause-btn { left: 1%; right: auto; min-width: 46px; font-size: 10px; }
+.two-touch .speech-bubble { top: 28% !important; }
+.two-touch .announcement { top: 38%; font-size: clamp(28px, 7cqw, 80px); }
+.two-touch .player-controls {
+  --control-size: clamp(42px, min(5.3cqw, 13cqh), 52px);
+  position: absolute; display: grid; grid-template-columns: repeat(5, var(--control-size)); grid-template-rows: repeat(2, var(--control-size));
+  width: auto; gap: 4px; bottom: max(2%, env(safe-area-inset-bottom)); z-index: 18; pointer-events: none;
+}
+.two-touch .p1-controls { left: 2%; right: auto; }
+.two-touch .p2-controls { right: 2%; left: auto; }
+.two-touch .move-controls, .two-touch .attack-controls { display: contents; }
+.two-touch .touch-btn { display: grid; width: var(--control-size); height: var(--control-size); border-width: 1px 1px 3px; font-size: 17px; pointer-events: auto; }
+.two-touch .touch-btn small { font: 900 8px Arial,sans-serif; margin-top: 2px; }
+.two-touch .control-owner { display: grid; place-items: center; grid-column: 1; grid-row: 1; font-size: 18px; color: #ffd746; }
+.two-touch .p2-controls .control-owner { color: #72dfff; }
+.two-touch .p2-controls .touch-btn { border-color: #7fdef5; }
+.two-touch .player-controls [data-hold="left"] { grid-column: 1; grid-row: 2; }
+.two-touch .player-controls [data-tap="jump"] { grid-column: 2; grid-row: 1; }
+.two-touch .player-controls [data-hold="right"] { grid-column: 3; grid-row: 2; }
+.two-touch .player-controls [data-hold="down"] { grid-column: 2; grid-row: 2; }
+.two-touch .player-controls [data-tap="punch"] { grid-column: 4; grid-row: 2; }
+.two-touch .player-controls [data-tap="kick"] { grid-column: 5; grid-row: 2; }
+.two-touch .player-controls [data-tap="special"] { grid-column: 5; grid-row: 1; }
+.two-touch .player-controls [data-hold="guard"] { grid-column: 4; grid-row: 1; }
+.two-touch .player-controls [data-tap="ability"] { grid-column: 3; grid-row: 1; }
+.two-touch .fight-screen.paused .player-controls { pointer-events: none; opacity: .2; }
+.two-touch .fight-screen.paused .touch-btn { pointer-events: none; }
+.touch-device .touch-controls:not([hidden]) { display: flex; }
+.touch-device.two-touch .player-controls:not([hidden]) { display: grid; }
+@media (max-height: 400px) {
+  .menu-card { inset: 5% 7%; gap: 4%; }
+  .mode-option { padding: 5% 3%; }
+  .pause-card { gap: 10px; padding: 16px; }
+  .ranking-screen { gap: 8px; padding: 2% 4%; }
+  .ranking-header .menu-kicker { display: none; }
+  .ranking-scroll td, .ranking-scroll th { padding: 7px 10px; }
+  .result-panel { gap: 8px; }
+}

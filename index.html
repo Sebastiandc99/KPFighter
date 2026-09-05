@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#020716">
   <meta name="description" content="KP Fighter, juego arcade de lucha para computadora y celular.">
   <title>KP FIGHTER</title>
-  <link rel="stylesheet" href="style.css?v=20260906c">
+  <link rel="stylesheet" href="style.css?v=20260906d">
 </head>
 <body>
   <main id="arcade" class="arcade" aria-label="KP Fighter">
@@ -17,13 +17,27 @@
         <p class="title-super">ARCADE</p>
         <h1 id="gameTitle"><span>KP</span> FIGHTER</h1>
         <button id="startBtn" class="start-btn" type="button">PRESIONA START</button>
-        <p class="title-credit">1 PLAYER · ARCADE EDITION</p>
+        <button id="titleRankingBtn" class="arcade-btn title-ranking" type="button">RANKING</button>
+        <p class="title-credit">1–2 JUGADORES · ARCADE EDITION</p>
+      </div>
+    </section>
+
+    <section id="modeScreen" class="screen menu-screen" aria-labelledby="modeTitle">
+      <div class="menu-card">
+        <p class="menu-kicker">KP FIGHTER</p>
+        <h2 id="modeTitle">ELIGE EL MODO</h2>
+        <div class="mode-options">
+          <button id="soloBtn" data-mode="solo" class="mode-option selected" type="button"><strong>1 JUGADOR</strong><span>Vos contra la máquina</span></button>
+          <button id="versusBtn" data-mode="versus" class="mode-option" type="button"><strong>2 JUGADORES</strong><span>Duelo en la misma pantalla</span></button>
+        </div>
+        <p class="mode-note">En celular: controles para ambos lados · En PC: un teclado</p>
+        <button id="modeBackBtn" class="arcade-btn" type="button">MENÚ PRINCIPAL</button>
       </div>
     </section>
 
     <section id="selectScreen" class="screen select-screen" aria-labelledby="selectTitle">
       <header class="select-header">
-        <span class="player-one">1P</span>
+        <span id="selectionPlayer" class="player-one">1P</span>
         <h2 id="selectTitle">SELECT YOUR FIGHTER</h2>
         <span class="select-clock" id="selectClock">∞</span>
       </header>
@@ -45,7 +59,7 @@
         <span>MARECHAL</span>
       </div>
       <div class="selection-info" aria-live="polite">
-        <p class="selection-kicker">ELIGE TU LUCHADOR</p>
+        <p id="selectionPrompt" class="selection-kicker">JUGADOR 1 · ELIGE TU LUCHADOR</p>
         <h3 id="selectionName">SERGIO</h3>
         <p id="selectionMoves">PANZAZO · ASADO · FERNET</p>
       </div>
@@ -77,7 +91,7 @@
         <button id="confirmBtn" class="confirm-btn" type="button">ELEGIR ESCENARIO</button>
       </div>
 
-      <p class="select-help">← → ELEGIR · ENTER CONFIRMAR</p>
+      <button id="fighterBackBtn" class="arcade-btn fighter-back" type="button">VOLVER</button><p class="select-help">← → ELEGIR · ENTER CONFIRMAR</p>
     </section>
 
     <section id="stageScreen" class="screen stage-screen" aria-labelledby="stageTitle">
@@ -119,13 +133,15 @@
           <div class="name-row"><strong id="leftName">SERGIO</strong><span>1P</span></div>
           <div class="health-shell"><div id="leftHealth" class="health-fill"></div></div>
           <div class="power-shell"><div id="leftPower" class="power-fill"></div></div>
+          <div class="score-line">SCORE <strong id="leftScore">000000</strong></div>
           <div id="leftRounds" class="round-wins"><i></i><i></i></div>
         </div>
         <div id="timer" class="timer">60</div>
         <div class="hud-side right-hud">
-          <div class="name-row"><span>CPU</span><strong id="rightName">BLOTTA</strong></div>
+          <div class="name-row"><span id="rightRole">CPU</span><strong id="rightName">BLOTTA</strong></div>
           <div class="health-shell"><div id="rightHealth" class="health-fill"></div></div>
           <div class="power-shell"><div id="rightPower" class="power-fill"></div></div>
+          <div class="score-line">SCORE <strong id="rightScore">000000</strong></div>
           <div id="rightRounds" class="round-wins"><i></i><i></i></div>
         </div>
       </div>
@@ -135,51 +151,84 @@
       <button id="soundBtn" class="corner-btn sound-btn" type="button" aria-label="Desactivar sonido">♪</button>
       <button id="pauseBtn" class="corner-btn pause-btn" type="button" aria-label="Pausar juego">PAUSA</button>
       <div id="announcement" class="announcement" aria-live="assertive"></div>
-      <p id="pauseHelp" class="pause-help" hidden>ESPACIO PARA SEGUIR</p>
+      <div id="pauseMenu" class="pause-menu" role="dialog" aria-modal="true" aria-labelledby="pauseTitle" hidden>
+        <div class="pause-card"><h2 id="pauseTitle">PAUSA</h2>
+          <button id="resumeBtn" class="arcade-btn primary" type="button">CONTINUAR</button>
+          <button id="quitBtn" class="arcade-btn" type="button">SALIR AL MENÚ PRINCIPAL</button>
+          <p id="pauseHelp">ESPACIO PARA CONTINUAR</p>
+        </div>
+      </div>
       <div id="speechBubble" class="speech-bubble" hidden>¡Te voy a echar!</div>
       <div id="flash" class="hit-flash" aria-hidden="true"></div>
 
       <div id="resultPanel" class="result-panel" hidden>
         <p id="resultKicker">K.O.</p>
         <h2 id="resultTitle">¡GANASTE!</h2>
-        <div class="result-actions">
-          <button id="rematchBtn" class="arcade-btn primary" type="button">REVANCHA</button>
-          <button id="selectBtn" class="arcade-btn" type="button">SELECCIÓN</button>
+        <p id="finalScore" class="final-score"></p>
+        <form id="winnerForm" class="winner-form" hidden>
+          <label for="winnerName">GANADOR · ESCRIBÍ TU NOMBRE</label>
+          <div class="name-entry"><input id="winnerName" name="winnerName" maxlength="20" autocomplete="nickname" placeholder="Tu nombre" required><button id="saveScoreBtn" class="arcade-btn primary" type="submit">GUARDAR</button></div>
+          <p id="saveError" class="form-message" role="status"></p>
+        </form>
+        <p id="cpuResultNote" class="cpu-result-note" hidden>La máquina ganó. A continuación, el ranking.</p>
+      </div>
+
+      <div id="touchControls" class="touch-controls player-controls p1-controls" aria-label="Controles del Jugador 1">
+        <span class="control-owner">1P</span><div class="move-controls">
+          <button class="touch-btn direction" data-player="1" data-hold="left" type="button" aria-label="Mover a la izquierda">◀</button>
+          <button class="touch-btn direction jump" data-player="1" data-tap="jump" type="button" aria-label="Saltar">▲</button>
+          <button class="touch-btn direction" data-player="1" data-hold="right" type="button" aria-label="Mover a la derecha">▶</button>
+          <button class="touch-btn direction crouch" data-player="1" data-hold="down" type="button" aria-label="Agacharse">▼</button>
+        </div>
+        <div class="attack-controls">
+          <button class="touch-btn attack punch" data-player="1" data-tap="punch" type="button" aria-label="Golpe; agachado, gancho"><span>A</span><small>GOLPE</small></button>
+          <button class="touch-btn attack kick" data-player="1" data-tap="kick" type="button" aria-label="Patada"><span>B</span><small>PATADA</small></button>
+          <button class="touch-btn attack special" data-player="1" data-tap="special" type="button" aria-label="Poder especial"><span>★</span><small>PODER</small></button>
+          <button class="touch-btn attack guard" data-player="1" data-hold="guard" type="button" aria-label="Cubrirse"><span>◆</span><small>CUBRIR</small></button>
+          <button id="abilityBtn" class="touch-btn attack teleport" data-player="1" data-tap="ability" type="button" aria-label="Habilidad propia" hidden><span id="abilityIcon">☁</span><small id="abilityLabel">HUMO</small></button>
         </div>
       </div>
 
-      <div id="touchControls" class="touch-controls" aria-label="Controles táctiles">
-        <div class="move-controls">
-          <button class="touch-btn direction" data-hold="left" type="button" aria-label="Mover a la izquierda">◀</button>
-          <button class="touch-btn direction jump" data-tap="jump" type="button" aria-label="Saltar">▲</button>
-          <button class="touch-btn direction" data-hold="right" type="button" aria-label="Mover a la derecha">▶</button>
-          <button class="touch-btn direction crouch" data-hold="down" type="button" aria-label="Agacharse">▼</button>
+      <div id="touchControls2" hidden class="touch-controls player-controls p2-controls" aria-label="Controles del Jugador 2">
+        <span class="control-owner">2P</span><div class="move-controls">
+          <button class="touch-btn direction" data-player="2" data-hold="left" type="button" aria-label="Mover a la izquierda">◀</button>
+          <button class="touch-btn direction jump" data-player="2" data-tap="jump" type="button" aria-label="Saltar">▲</button>
+          <button class="touch-btn direction" data-player="2" data-hold="right" type="button" aria-label="Mover a la derecha">▶</button>
+          <button class="touch-btn direction crouch" data-player="2" data-hold="down" type="button" aria-label="Agacharse">▼</button>
         </div>
         <div class="attack-controls">
-          <button class="touch-btn attack punch" data-tap="punch" type="button" aria-label="Golpe; agachado, gancho"><span>A</span><small>GOLPE</small></button>
-          <button class="touch-btn attack kick" data-tap="kick" type="button" aria-label="Patada"><span>B</span><small>PATADA</small></button>
-          <button class="touch-btn attack special" data-tap="special" type="button" aria-label="Poder especial"><span>★</span><small>PODER</small></button>
-          <button class="touch-btn attack guard" data-hold="guard" type="button" aria-label="Cubrirse"><span>◆</span><small>CUBRIR</small></button>
-          <button id="abilityBtn" class="touch-btn attack teleport" data-tap="ability" type="button" aria-label="Habilidad propia" hidden><span id="abilityIcon">☁</span><small id="abilityLabel">HUMO</small></button>
+          <button class="touch-btn attack punch" data-player="2" data-tap="punch" type="button" aria-label="Golpe; agachado, gancho"><span>A</span><small>GOLPE</small></button>
+          <button class="touch-btn attack kick" data-player="2" data-tap="kick" type="button" aria-label="Patada"><span>B</span><small>PATADA</small></button>
+          <button class="touch-btn attack special" data-player="2" data-tap="special" type="button" aria-label="Poder especial"><span>★</span><small>PODER</small></button>
+          <button class="touch-btn attack guard" data-player="2" data-hold="guard" type="button" aria-label="Cubrirse"><span>◆</span><small>CUBRIR</small></button>
+          <button id="abilityBtn2" class="touch-btn attack teleport" data-player="2" data-tap="ability" type="button" aria-label="Habilidad propia" hidden><span id="abilityIcon2">☁</span><small id="abilityLabel2">HUMO</small></button>
         </div>
       </div>
 
       <div class="desktop-help" aria-hidden="true">
-        <span><kbd>A</kbd><kbd>D</kbd> MOVER</span>
-        <span><kbd>W</kbd> SALTAR</span>
-        <span><kbd>S</kbd> AGACHAR</span>
-        <span><kbd>J</kbd> GOLPE · <kbd>↓</kbd> + <kbd>J</kbd> GANCHO</span>
-        <span><kbd>K</kbd> PATADA</span>
-        <span><kbd>L</kbd> PODER</span>
-        <span><kbd>I</kbd> CUBRIR</span>
-        <span id="abilityHelp"><kbd>H</kbd> <span id="abilityKeyLabel">HUMO</span></span>
-        <span><kbd>ESPACIO</kbd> PAUSA</span>
+        <span class="solo-help"><kbd>A</kbd><kbd>D</kbd> MOVER</span>
+        <span class="solo-help"><kbd>W</kbd> SALTAR</span>
+        <span class="solo-help"><kbd>S</kbd> AGACHAR</span>
+        <span class="solo-help"><kbd>J</kbd> GOLPE · <kbd>↓</kbd> + <kbd>J</kbd> GANCHO</span>
+        <span class="solo-help"><kbd>K</kbd> PATADA</span>
+        <span class="solo-help"><kbd>L</kbd> PODER</span>
+        <span class="solo-help"><kbd>I</kbd> CUBRIR</span>
+        <span class="solo-help" id="abilityHelp"><kbd>H</kbd> <span id="abilityKeyLabel">HUMO</span></span>
+        <span class="solo-help"><kbd>ESPACIO</kbd> PAUSA</span>
+
+        <span class="versus-help">1P: WASD · J/K/L · I CUBRIR · H HABILIDAD</span><span class="versus-help">2P: FLECHAS · 7/8/9 · 0 CUBRIR · 6 HABILIDAD</span><span class="versus-help">ESPACIO: PAUSA</span>
       </div>
+    </section>
+
+    <section id="rankingScreen" class="screen menu-screen ranking-screen" aria-labelledby="rankingTitle">
+      <header class="ranking-header"><p class="menu-kicker">KP FIGHTER</p><h2 id="rankingTitle">RANKING HISTÓRICO</h2><p id="rankingStatus" role="status">Cargando puntajes…</p></header>
+      <div class="ranking-scroll" tabindex="0" aria-label="Ranking completo"><table><thead><tr><th>POS.</th><th>JUGADOR</th><th>PUNTAJE</th><th>MODO</th></tr></thead><tbody id="rankingRows"></tbody></table></div>
+      <div class="ranking-actions"><button id="rankingMenuBtn" class="arcade-btn" type="button">MENÚ PRINCIPAL</button><button id="newGameBtn" class="arcade-btn primary" type="button">NUEVA PARTIDA</button><button id="rankingRetryBtn" class="arcade-btn" type="button" hidden>REINTENTAR</button></div>
     </section>
 
     <div class="scanlines" aria-hidden="true"></div>
   </main>
 
-  <script src="game.js?v=20260906c"></script>
+  <script src="game.js?v=20260906d"></script>
 </body>
 </html>

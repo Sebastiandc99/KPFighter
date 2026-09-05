@@ -15,7 +15,7 @@ function game() {
     if (!nodes.has(id)) {
       const classes = new Set();
       nodes.set(id, {
-        dataset, style: {}, hidden: false, disabled: false, textContent: "", width: 960, height: 540,
+        dataset, children: [], value: "", focus() {}, appendChild(child) { this.children.push(child); }, replaceChildren(...children) { this.children = children; }, style: {}, hidden: false, disabled: false, textContent: "", width: 960, height: 540,
         classList: {
           add: key => classes.add(key), remove: key => classes.delete(key),
           contains: key => classes.has(key),
@@ -34,6 +34,9 @@ function game() {
   const rightRounds = [0, 1].map(i => node("right-round-" + i));
   const holds = ["left", "right", "down", "guard"].map(hold => node("hold-" + hold, { hold }));
   const taps = ["jump", "punch", "kick", "special", "ability"].map(tap => node("tap-" + tap, { tap }));
+  const holds2 = ["left", "right", "down", "guard"].map(hold => node("p2-hold-" + hold, { hold, player: "2" }));
+  const taps2 = ["jump", "punch", "kick", "special", "ability"].map(tap => node("p2-tap-" + tap, { tap, player: "2" }));
+  const modes = ["solo", "versus"].map(mode => node(mode + "Btn", {mode}));
   const win = node("window");
   const doc = node("document");
   Object.assign(doc, {
@@ -42,9 +45,9 @@ function game() {
     getElementById: id => node(id),
     querySelector: selector => selector === '[data-tap="special"]' ? taps[3] : node(selector),
     querySelectorAll: selector => ({
-      "[data-pick]": picks, "[data-portrait]": portraits, "[data-hold]": holds, "[data-tap]": taps,
+      "[data-pick]": picks, "[data-portrait]": portraits, "[data-hold]": [...holds,...holds2], "[data-tap]": [...taps,...taps2], "[data-mode]": modes,
       "[data-stage]": stages, "#leftRounds i": leftRounds, "#rightRounds i": rightRounds,
-      "[data-hold].active": holds.filter(n => n.classList.contains("active"))
+      "[data-hold].active": [...holds,...holds2].filter(n => n.classList.contains("active"))
     }[selector] || [])
   });
   const sandbox = vm.createContext({
@@ -61,7 +64,7 @@ function game() {
     win.listeners[type]({ code, key: code, repeat, preventDefault() { prevented = true; } });
     return prevented;
   };
-  return { run, tick, key, nodes, holds, taps };
+  return { run, tick, key, nodes, holds, taps, holds2, taps2, sandbox };
 }
 
 test("neutral jump has its own pose and never inflicts a kick", () => {
@@ -502,7 +505,7 @@ test("stage selection follows the fighter screen and supports keyboard, touch an
   assert.ok(g.nodes.get("gameScreen").classList.contains("active"));
 });
 
-test("two wins end the match 2–0 and rematch retains opponents and stage", () => {
+test("two wins end the match 2–0 and show registration before another game", () => {
   const g = game();
   g.run('chooseStage("mine", false); startGame("sergio", "blotta"); state = "playing";');
   g.key("KeyD");
@@ -531,7 +534,9 @@ test("two wins end the match 2–0 and rematch retains opponents and stage", () 
   g.tick(3);
   assert.equal(g.run("match.round"), 2);
   assert.equal(g.nodes.get("resultPanel").hidden, false);
-  g.nodes.get("rematchBtn").listeners.click();
+  assert.equal(g.nodes.get("resultKicker").textContent, "GAME OVER");
+  assert.equal(g.nodes.get("winnerForm").hidden, false);
+  g.run('startGame(playerChoice, cpu.kind);');
   assert.equal(g.run("match.round"), 1);
   assert.equal(g.run("match.playerWins + match.cpuWins"), 0);
   assert.equal(g.run("cpu.kind"), "blotta");
@@ -757,14 +762,16 @@ test("blocking and interrupted melee stop the owning sound immediately", () => {
   assert.equal(h.run("combatSounds.size"), 0);
 });
 
-test("power audio begins on release, continues after casting, and stops on collision or block", () => {
+test("power audio begins during execution, continues after casting, and stops on collision or block", () => {
   for (const kind of ["sergio", "marechal"]) {
     for (const block of [false, true]) {
       const g = game();
       g.run(`startGame('${kind}', 'blotta'); state = "playing"; player.x = 100; cpu.x = 750; cpu.facing = -1; cpu.guarding = ${block};`);
       enableCombatAudio(g);
-      g.key("KeyL"); g.tick(.15);
-      assert.equal(g.run("combatLog.length"), 0);
+      g.key("KeyL");
+      assert.equal(g.run("combatLog.length"), 1);
+      assert.equal(g.run("projectiles.length"), 0);
+      g.tick(.15);
       g.tick(.4);
       assert.equal(g.run("player.action"), "idle");
       assert.equal(g.run("combatSounds.size"), 1);
@@ -829,4 +836,85 @@ test("round end and selection clear all combat voices and late audio cannot revi
   const count = g.run("combatLog.length");
   g.run('COMBAT_AUDIO.general.buffer = {name: "general", duration: 1}; syncCombatSounds();');
   assert.equal(g.run("combatLog.length"), count);
+});
+
+test('mode selection requires both human picks, allows mirror matches and disables CPU AI', () => {
+  const g=game(); g.run('openModeSelection()'); assert.equal(g.run('state'),'mode');
+  g.run('startMode("versus"); chooseFighter("marechal",false); confirmFighter()');
+  assert.equal(g.run('selectionPlayer'),2); assert.equal(g.run('state'),'select');
+  g.run('chooseFighter("marechal",false); confirmFighter()'); assert.equal(g.run('state'),'stage');
+  g.run('startGame(playerChoice); state="playing"; aiEnabled=true');
+  assert.equal(g.run('cpu.kind'),'marechal');
+  const x=g.run('cpu.x'); g.tick(1); assert.equal(g.run('cpu.x'),x); assert.equal(g.run('cpu.action'),'idle');
+  g.key('KeyD'); g.key('ArrowLeft'); g.tick(.2);
+  assert.ok(g.run('player.vx>0 && cpu.vx<0'));
+  g.key('KeyJ'); g.key('Digit8'); assert.equal(g.run('player.action'),'punch'); assert.equal(g.run('cpu.action'),'kick');
+});
+
+test('both phone players hold and attack simultaneously with independent pointer cancellation', () => {
+  const g=game(); g.run('gameMode="versus"');
+  const ev=id=>({pointerId:id,pointerType:'touch',preventDefault(){}});
+  g.holds[2].listeners.pointerdown(ev(1)); g.holds2[2].listeners.pointerdown(ev(2));
+  g.taps[1].listeners.pointerdown(ev(3)); g.taps2[1].listeners.pointerdown(ev(4));
+  assert.equal(g.run('player.action'),'uppercut'); assert.equal(g.run('cpu.action'),'uppercut');
+  g.holds[2].listeners.pointercancel(ev(1));
+  assert.equal(g.run('held.down'),false); assert.equal(g.run('held2.down'),true);
+  g.key('Space'); const snapshot=g.run('JSON.stringify([player,cpu,projectiles,roundTime,stageTime])');
+  g.tick(2); g.taps2[3].listeners.pointerdown(ev(5));
+  assert.equal(g.run('JSON.stringify([player,cpu,projectiles,roundTime,stageTime])'),snapshot);
+  assert.equal(g.nodes.get('pauseMenu').hidden,false);
+  g.nodes.get('quitBtn').listeners.click(); assert.equal(g.run('state'),'title'); assert.equal(g.run('projectiles.length'),0);
+  assert.equal(g.nodes.get('pauseMenu').hidden,true);
+});
+
+test('score rewards actual damage, survives rounds and registers the second player winner', async () => {
+  const g=game(); g.run('gameMode="versus"; hit(player,10,-10,0,cpu,{sourceX:cpu.x})');
+  assert.equal(g.run('match.scores[1]'),100); assert.equal(g.run('match.scores[0]'),0);
+  g.run('finishRound(cpu,"K.O.")'); const score=g.run('match.scores[1]'); g.tick(2.8);
+  assert.equal(g.run('match.scores[1]'),score); assert.notEqual(g.nodes.get('resultKicker').textContent,'GAME OVER');
+  g.run('state="playing"; finishRound(cpu,"K.O.")'); g.tick(2.3);
+  assert.equal(g.nodes.get('resultKicker').textContent,'GAME OVER'); assert.equal(g.nodes.get('winnerForm').hidden,false);
+  let posted; g.sandbox.fetch=async (url,options)=>{
+    if(options.method==='POST') { posted=JSON.parse(options.body); return {ok:true,json:async()=>({})}; }
+    return {ok:true,json:async()=>url.includes('?after=')?{entries:[{id:'older',name:'Otro',score:1,createdAt:1,mode:'solo'}],next:null}:{entries:[{...posted,createdAt:2}],next:'page2'}};
+  };
+  g.nodes.get('winnerName').value=' Seba  2 '; await g.run('saveWinner({preventDefault(){}})');
+  assert.equal(posted.name,'Seba 2'); assert.equal(posted.score,g.run('match.scores[1]'));
+  assert.equal(posted.character,g.run('cpu.kind')); assert.equal(g.run('state'),'ranking');
+  assert.equal(g.nodes.get('rankingRows').children.length,2);
+  assert.equal(g.nodes.get('rankingRows').children[0].children[1].textContent,'Seba 2');
+});
+
+test('failed ranking save preserves name and can retry once without duplicated submission', async () => {
+  const g=game(); g.run('match.playerWins=1; finishRound(player,"K.O.")'); g.tick(2.3);
+  g.nodes.get('winnerName').value='<Seba>';
+  g.sandbox.fetch=async()=>{throw new Error('offline')}; await g.run('saveWinner({preventDefault(){}})');
+  assert.equal(g.nodes.get('winnerName').value,'<Seba>'); assert.equal(g.run('match.saved'),false);
+  let submissions=0;
+  g.sandbox.fetch=async(url,options)=>{if(options.method==='POST') submissions++;return {ok:true,json:async()=>({entries:[],next:null})}};
+  await Promise.all([g.run('saveWinner({preventDefault(){}})'),g.run('saveWinner({preventDefault(){}})')]);
+  assert.equal(submissions,1); assert.equal(g.run('state'),'ranking');
+});
+
+test('point-blank powers start during casting and retain an audible transient through immediate impact', () => {
+  for(const kind of ['marechal','sergio','tunki']) {
+    const g=game(); enableCombatAudio(g);
+    g.run(`startGame('${kind}','blotta'); state='playing'; audioCtx.currentTime=0; player.x=300; cpu.x=360; attack(player,'special')`);
+    assert.equal(g.run('combatLog.filter(e=>e.event==="start").length'),1);
+    g.tick(.3); assert.ok(g.run('cpu.health<100')); assert.equal(g.run('projectiles.length'),0);
+    assert.equal(g.run('soundTails.size'),1);
+    g.key('Space'); assert.equal(g.run('soundTails.size'),0);
+  }
+});
+
+test('selection music loops through stages and fight music survives rounds, pauses and stops at match end', () => {
+  const g=game(); enableCombatAudio(g);
+  g.run(`audioCtx.currentTime=0; EXTRA_AUDIO.selection.buffer={name:'selection',duration:20}; EXTRA_AUDIO.music.forEach((m,i)=>m.buffer={name:'fight'+i,duration:120}); startMode('solo')`);
+  assert.equal(g.run('musicSource.loop'),true); assert.equal(g.run('musicTrack.usage'),'selection');
+  const source=g.run('musicSource'); g.run('confirmFighter()'); assert.equal(g.run('musicSource'),source);
+  g.run('startGame(playerChoice); state="playing"'); assert.equal(g.run('musicTrack.usage'),'fight');
+  g.run('audioCtx.currentTime=4; togglePause()'); assert.equal(g.run('musicSource'),null); assert.equal(g.run('musicElapsed'),4);
+  g.run('audioCtx.currentTime=40; togglePause()'); assert.equal(g.run('combatLog.at(-1).offset'),4);
+  const fight=g.run('musicSource'); g.run('finishRound(player,"K.O.")'); assert.equal(g.run('musicSource'),fight);
+  g.run('state="playing"; finishRound(player,"K.O.")'); assert.equal(g.run('musicSource'),null);
 });

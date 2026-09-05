@@ -1,6 +1,6 @@
 # KP FIGHTER
 
-Juego de lucha arcade para navegador. Portada → selección de luchador → selección de escenario → combate contra la máquina. Cada paso ocupa una sola pantalla.
+Juego de lucha arcade para navegador. Portada → modo 1/2 jugadores → selección de luchadores → selección de escenario → combate → ganador y GAME OVER → nombre → ranking general. Cada paso ocupa una sola pantalla.
 
 ## Jugar
 
@@ -38,13 +38,13 @@ La Tunki lanza flores con `L`. Con `H` salta hacia el rival y cae con un aplasta
 - **La Tunki:** proyectiles de flores, patadas y salto aplastante. Conserva la ropa negra y rosa y la panza prominente de su diseño.
 - **Marechal:** alto y delgado, con sombrero de paja y atuendo blanco y azul. Camina, salta, golpea, patea, se agacha y se cubre con los controles básicos. Lanza rayos desde las manos con `L` o **PODER** en celular (35 de energía).
 
-El rival se elige entre los demás luchadores y es controlado por la máquina. Cuando Blotta participa, al iniciar el combate lanza su desafío: “Te voy a echar”. Los tres rounds usan sus nuevas grabaciones: **Round 1**, **Round 2** y **Final Round**. El desempate muestra **FINAL ROUND**. Los títulos y “¡PELEA!” siguen los tiempos de voz de cada archivo; se precargan las tres grabaciones y respetan el silencio y la pausa. La configuración está en `ROUND_AUDIO`.
+En 1 jugador, el rival se elige entre los demás luchadores y lo controla la máquina. En 2 jugadores cada participante elige su personaje, incluso el mismo que el rival, y ambos juegan en el mismo dispositivo. Cuando Blotta participa, al iniciar el combate lanza su desafío: “Te voy a echar”. Los tres rounds usan sus nuevas grabaciones: **Round 1**, **Round 2** y **Final Round**. El desempate muestra **FINAL ROUND**. Los títulos y “¡PELEA!” siguen los tiempos de voz de cada archivo; se precargan las tres grabaciones y respetan el silencio y la pausa. La configuración está en `ROUND_AUDIO`.
 
 ## Rounds y escenarios
 
 Gana el primero en conseguir **dos rounds**: el combate puede terminar 2–0 o decidirse en el tercero. Cada round dura 60 segundos; al agotarse el tiempo, gana quien conserve más vida. Los empates, incluido un doble K.O., se repiten sin sumar victorias. El marcador muestra los rounds ganados junto a las barras.
 
-El siguiente round empieza automáticamente después del resultado. Se reinician vida, energía, posiciones y efectos, manteniendo los mismos luchadores y escenario. La revancha reinicia el marcador con el mismo rival y escenario.
+El siguiente round empieza automáticamente después del resultado. Se reinician vida, energía, posiciones y efectos, manteniendo los mismos luchadores y escenario. Después del ranking, Nueva partida vuelve a la elección del modo y reinicia los puntajes.
 
 Después de elegir luchador se puede seleccionar **Patio Arcade**, **Galería Subterránea** o **Planta Newmont**, con vista previa, flechas/Enter o controles táctiles. Las dos imágenes aportadas se conservan en sus proporciones y se encuadran para la pantalla horizontal; el cartel de Newmont permanece visible. `Esc` o **VOLVER** regresa a la selección de personaje.
 
@@ -65,3 +65,24 @@ Pruebas de lógica y entrada: `node --test tests/combat.test.cjs`.
 Los golpes de puño, ganchos y patadas usan **Golpe general**. El panzazo de Sergio usa **Panzazo Sergio**, aunque no alcance al rival. Los rayos de Marechal usan **Poder rayo** desde que salen de las manos; el asado de Sergio usa **Poder sergio carne** desde que se lanza. Cada ataque controla su audio: se corta al conectar, bloquearse, terminar el movimiento o tocar el borde visible. Los proyectiles mantienen el sonido durante todo su recorrido, aunque el luchador ya haya terminado la animación de lanzamiento.
 
 Los audios respetan pausa, cambio de pestaña, silencio, interrupciones y fin de round. Las voces de ataques simultáneos son independientes. Se omite el silencio inicial medido de los archivos para que los golpes cortos se escuchen a tiempo.
+
+
+## Dos jugadores, puntaje y ranking general
+
+En PC, el Jugador 1 usa WASD, J/K/L, I y H. El Jugador 2 usa flechas, 7/8/9 para golpe/patada/poder, 0 para cubrirse y 6 para su habilidad. También puede usar el teclado numérico: 1/2/3 para ataques, 0 para cubrirse y 4 para habilidad. Espacio pausa para ambos.
+
+En el mismo celular, cada jugador tiene su propio grupo de controles compactos en una esquina inferior. Los contactos se identifican por dedo y jugador; cancelar un contacto no suelta los del rival. Se reserva espacio debajo del escenario y se prioriza horizontal.
+
+El puntaje se acumula durante toda la pelea: 10 puntos por vida realmente quitada, 25 por bloqueo, 1.000 por round ganado más 5 por segundo restante y 10 por vida conservada; ganar la pelea suma 2.000. Los fallos no suman. Cada jugador ve su propio puntaje.
+
+Al conseguir dos rounds se muestra al ganador, luego GAME OVER y el formulario de nombre. El resultado se guarda por Internet en una base de datos compartida y permanente; no depende del navegador ni de almacenamiento local. Tras guardar, se carga automáticamente todo el ranking, ordenado por puntaje descendente. Si falla la conexión, se conserva el nombre y se permite reintentar sin duplicar el registro. Si gana la CPU, se muestra el ranking sin registrar un nombre humano. También se consulta desde la portada.
+
+Servicio: https://kp-fighter-ranking.sebastiandc99.chatgpt.site/api/ranking. Es un ranking recreativo: valida datos y evita duplicados por partida, pero no verifica en servidor toda la simulación de combate. El nombre ingresado y el puntaje son públicos. La tabla tiene desplazamiento y carga automáticamente todas las páginas del historial.
+
+La pausa incluye Continuar y Salir al menú principal sin recargar. Congela reloj, movimientos, animaciones, proyectiles y audio; salir descarta la partida actual.
+
+## Música y poderes a corta distancia
+
+**Musica seleccion de personajes** se repite durante ambas selecciones. Al iniciar una pelea se elige aleatoriamente **Sonido fighter 1** o **Sonido fighter 2**, en bucle hasta terminar el encuentro, incluidos los intervalos entre rounds. La música baja durante los anuncios y respeta pausa y silencio.
+
+**Flores tunki** acompaña el proyectil de La Tunki. Los sonidos de flores, rayo y carne comienzan al ejecutar el poder, antes de recorrer distancia. Al impactar se detienen; si el impacto fue prácticamente instantáneo se permite únicamente un transitorio mínimo de 80 ms para que resulte audible. Se omite el silencio inicial y cada voz tiene su propio ciclo de vida. Pausar o salir detiene también ese transitorio y los sonidos arcade sintetizados.

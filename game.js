@@ -12,6 +12,8 @@ let drawingScale = 1;
 
 const ui = {
   titleScreen: document.getElementById("titleScreen"),
+  modeScreen: document.getElementById("modeScreen"),
+  rankingScreen: document.getElementById("rankingScreen"),
   selectScreen: document.getElementById("selectScreen"),
   stageScreen: document.getElementById("stageScreen"),
   gameScreen: document.getElementById("gameScreen"),
@@ -96,13 +98,28 @@ const COMBAT_AUDIO = {
   general: { src: "assets/golpe-general.mp3", volume: .75, start: .18, end: .59 },
   belly: { src: "assets/panzazo-sergio.mp3", volume: .8, start: .035 },
   lightning: { src: "assets/poder-rayo.mp3", volume: .65, start: .035, end: 1.69 },
-  meat: { src: "assets/poder-sergio-carne.mp3", volume: .8, start: 0 }
+  meat: { src: "assets/poder-sergio-carne.mp3", volume: .8, start: 0 },
+  flowers: { src: "assets/flores-tunki.mp3", volume: .8, start: .025, end: 2.42 }
 };
 // Each attack/projectile owns its own voice; removing one never stops another.
 const combatSounds = new Set();
+const EXTRA_AUDIO = {
+  music: [{src: "assets/fighter-1.mp3", usage: "fight"}, {src: "assets/fighter-2.mp3", usage: "fight"}],
+  selection: {src: "assets/seleccion.mp3", usage: "selection"}
+};
+const soundTails = new Set();
+let musicTrack = null;
+let musicElapsed = 0;
+let musicSource = null;
+let musicGain = null;
+let musicStartedAt = 0;
 
 let state = "title";
 let playerChoice = "sergio";
+let opponentChoice = "blotta";
+let gameMode = "solo";
+let selectionPlayer = 1;
+let modeChoice = "solo";
 let stageChoice = "arcade";
 let match = { round: 1, playerWins: 0, cpuWins: 0, complete: false, repeat: false };
 let resolvingContacts = false;
@@ -114,12 +131,15 @@ let particles = [];
 let afterimages = [];
 let effects = [];
 let held = { left: false, right: false, down: false, guard: false };
+const held2 = { left: false, right: false, down: false, guard: false };
 let roundTime = 60;
 let lastTime = performance.now();
 let aiClock = 0;
 let screenShake = 0;
 let stageTime = 0;
 let muted = false;
+const synthVoices = new Set();
+let soundGeneration = 0;
 let audioCtx = null;
 let roundVoiceSource = null;
 let roundVoiceStarted = false;
@@ -148,6 +168,7 @@ function mobileInput() {
 function syncViewport() {
   const sideways = mobileInput() && window.innerHeight > window.innerWidth;
   document.body.classList.toggle("phone-portrait", sideways);
+  document.body.classList.toggle("two-touch", gameMode === "versus" && (mobileInput() || window.innerWidth <= 820));
   const density = Math.min(2, Math.max(1, (canvas.clientWidth || VIEW_WIDTH) * (window.devicePixelRatio || 1) / VIEW_WIDTH));
   const width = Math.round(VIEW_WIDTH * density);
   const height = Math.round(VIEW_HEIGHT * density);
@@ -174,7 +195,64 @@ function clearHeld() {
   keyHolds.clear();
   touchHolds.clear();
   Object.keys(held).forEach(key => { held[key] = false; });
+  Object.keys(held2).forEach(key => { held2[key] = false; });
   document.querySelectorAll("[data-hold].active").forEach(button => button.classList.remove("active"));
+}
+
+function humanFighter(f) { return f.isPlayer || gameMode === "versus"; }
+function fighterInput(f) { return f === cpu ? held2 : held; }
+function fighterLabel(f) { return (f === player ? "1P" : gameMode === "versus" ? "2P" : "CPU") + " · " + stats[f.kind].name; }
+
+function mainMenu() {
+  stopRoundVoice(); stopAllCombatSounds(); stopMusic();
+  clearHeld();
+  fighters = []; player = cpu = null;
+  projectiles = []; particles = []; afterimages = []; effects = [];
+  hitStop = screenShake = accumulator = 0;
+  state = "title";
+  ui.resultPanel.hidden = true;
+  document.getElementById("winnerForm").hidden = true;
+  setPauseUI(false);
+  showScreen(ui.titleScreen);
+  document.body.classList.remove("versus-mode");
+  document.body.classList.remove("two-touch");
+  ui.startBtn.focus?.();
+}
+
+function openModeSelection() {
+  mainMenu();
+  state = "mode";
+  showScreen(ui.modeScreen);
+  chooseMode(modeChoice);
+  ensureAudio();
+}
+
+function chooseMode(mode) {
+  modeChoice = mode === "versus" ? "versus" : "solo";
+  document.querySelectorAll("[data-mode]").forEach(button => {
+    button.classList.toggle("selected", button.dataset.mode === modeChoice);
+    button.setAttribute("aria-pressed", String(button.dataset.mode === modeChoice));
+  });
+}
+
+function startMode(mode) {
+  gameMode = mode;
+  modeChoice = mode;
+  selectionPlayer = 1;
+  document.body.classList.toggle("versus-mode", gameMode === "versus");
+  openSelection();
+}
+
+function confirmFighter() {
+  if (gameMode === "versus" && selectionPlayer === 1) {
+    selectionPlayer = 2;
+    chooseFighter(opponentChoice, false);
+  } else openStageSelection();
+}
+
+function backFromFighters() {
+  if (gameMode === "versus" && selectionPlayer === 2) { selectionPlayer = 1; chooseFighter(playerChoice, false); }
+  else openModeSelection();
 }
 
 function makeFighter(kind, x, isPlayer) {
@@ -200,14 +278,20 @@ function makeFighter(kind, x, isPlayer) {
 }
 
 function showScreen(screen) {
-  [ui.titleScreen, ui.selectScreen, ui.stageScreen, ui.gameScreen].forEach(node => {
+  [ui.titleScreen, ui.modeScreen, ui.selectScreen, ui.stageScreen, ui.gameScreen, ui.rankingScreen].forEach(node => {
     node.classList.toggle("active", node === screen);
   });
 }
 
 function chooseFighter(kind, playSound = true) {
   if (!stats[kind]) return;
-  playerChoice = kind;
+  if (selectionPlayer === 2) opponentChoice = kind;
+  else playerChoice = kind;
+  document.getElementById("selectionPlayer").textContent = selectionPlayer + "P";
+  document.getElementById("selectionPrompt").textContent = "JUGADOR " + selectionPlayer + " · ELIGE TU LUCHADOR";
+  document.querySelectorAll(".p1-arrow small").forEach(node => { node.textContent = selectionPlayer + "P"; });
+  ui.selectScreen.classList.toggle("selecting-p2", selectionPlayer === 2);
+  ui.confirmBtn.textContent = gameMode === "versus" && selectionPlayer === 1 ? "CONFIRMAR JUGADOR 1" : "ELEGIR ESCENARIO";
   document.querySelectorAll("[data-pick]").forEach(button => {
     button.classList.toggle("selected", button.dataset.pick === kind);
     button.setAttribute("aria-pressed", String(button.dataset.pick === kind));
@@ -224,12 +308,13 @@ function openSelection() {
   stopRoundVoice();
   stopAllCombatSounds();
   state = "select";
+  selectMusic("selection");
   clearHeld();
   ui.resultPanel.hidden = true;
   ui.speech.hidden = true;
   setPauseUI(false);
   showScreen(ui.selectScreen);
-  chooseFighter(playerChoice, false);
+  chooseFighter(selectionPlayer === 2 ? opponentChoice : playerChoice, false);
   ensureAudio();
   sfx("start");
 }
@@ -251,7 +336,7 @@ function openStageSelection() {
   state = "stage";
   clearHeld();
   showScreen(ui.stageScreen);
-  document.getElementById("stageFighter").textContent = stats[playerChoice].name + " · GANA DOS ROUNDS";
+  document.getElementById("stageFighter").textContent = stats[playerChoice].name + (gameMode === "versus" ? " VS " + stats[opponentChoice].name : " · GANA DOS ROUNDS");
   chooseStage(stageChoice, false);
   ensureAudio();
 }
@@ -260,8 +345,10 @@ function startGame(choice, opponentKind = null) {
   accumulator = 0;
   playerChoice = choice;
   const opponents = roster.filter(kind => kind !== choice);
-  match = { round: 1, playerWins: 0, cpuWins: 0, complete: false, repeat: false,
-    playerKind: choice, cpuKind: opponents.includes(opponentKind) ? opponentKind : opponents[Math.floor(Math.random() * opponents.length)] };
+  match = { round: 1, playerWins: 0, cpuWins: 0, complete: false, repeat: false, scores: [0, 0], winner: null, saved: false, saving: false,
+    id: globalThis.crypto?.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2),
+    playerKind: choice, cpuKind: gameMode === "versus" ? (stats[opponentKind] ? opponentKind : opponentChoice) : opponents.includes(opponentKind) ? opponentKind : opponents[Math.floor(Math.random() * opponents.length)] };
+  selectMusic();
   startRound();
 }
 
@@ -292,6 +379,16 @@ function startRound() {
   document.getElementById("roundNotice").hidden = true;
   ui.leftName.textContent = stats[player.kind].name;
   ui.rightName.textContent = stats[cpu.kind].name;
+  document.getElementById("rightRole").textContent = gameMode === "versus" ? "2P" : "CPU";
+  document.getElementById("touchControls2").hidden = gameMode !== "versus";
+  document.body.classList.toggle("versus-mode", gameMode === "versus");
+  const ability2 = stats[cpu.kind].ability;
+  document.getElementById("abilityBtn2").hidden = !ability2;
+  document.getElementById("abilityLabel2").textContent = ability2 === "slam" ? "APLASTAR" : "HUMO";
+  document.getElementById("abilityIcon2").textContent = ability2 === "slam" ? "▼" : "☁";
+  document.getElementById("abilityBtn2").setAttribute("aria-label", ability2 === "slam" ? "Salto aplastante del Jugador 2" : "Humo del Jugador 2");
+  document.getElementById("winnerForm").hidden = true;
+  document.getElementById("cpuResultNote").hidden = true;
   const ability = stats[player.kind].ability;
   ui.abilityBtn.hidden = !ability;
   document.getElementById("abilityHelp").hidden = !ability;
@@ -304,6 +401,7 @@ function startRound() {
   updateHud();
   beginIntro();
   ensureAudio();
+  syncMusic();
   sfx("start");
 }
 
@@ -329,6 +427,7 @@ function positionSpeech() {
 }
 
 function update(dt) {
+  if (["select", "stage", "intro", "playing", "roundOver"].includes(state)) advanceMusic(dt);
   if (!["intro", "playing", "roundOver", "finished"].includes(state)) return;
   fighters.forEach(f => {
     f.prevX = f.x; f.prevY = f.y;
@@ -356,7 +455,7 @@ function update(dt) {
       announce("¡PELEA!", 600);
       if (!roundVoiceStarted) sfx("fight");
     }
-    if (introElapsed >= timing.end) { stopRoundVoice(); state = "playing"; }
+    if (introElapsed >= timing.end) { stopRoundVoice(); state = "playing"; syncMusic(); }
     return;
   }
   if (state === "finished" || state === "roundOver") {
@@ -372,6 +471,8 @@ function update(dt) {
       updateAnimation(f, dt);
     });
     if (state === "finished" && resultElapsed >= .8) ui.resultPanel.hidden = false;
+    if (state === "finished" && resultElapsed >= 2.2 && !match.endShown) showGameOver();
+    if (state === "finished" && resultElapsed >= 3.8 && match.winner === 1 && gameMode === "solo") showRanking();
     if (state === "roundOver" && resultElapsed >= .8) document.getElementById("roundNotice").hidden = false;
     if (state === "roundOver" && resultElapsed >= 2.65) {
       match.round = match.playerWins + match.cpuWins + 1;
@@ -380,7 +481,7 @@ function update(dt) {
     return;
   }
   if (hitStop > 0) {
-    suspendCombatSounds();
+    suspendCombatSounds(false);
     hitStop = Math.max(0, hitStop - dt);
     return;
   }
@@ -405,7 +506,8 @@ function update(dt) {
     if (f.action === "idle" || f.action === "block") f.facing = other.x >= f.x ? 1 : -1;
   });
   updatePlayer(dt);
-  if (aiEnabled) updateAI(dt);
+  if (gameMode === "versus") updateHuman(cpu, held2);
+  else if (aiEnabled) updateAI(dt);
   fighters.forEach(f => updateFighter(f, dt));
   separateFighters();
   // Capture both contacts before resolving so simultaneous hits can trade.
@@ -436,8 +538,12 @@ function setStance(f, down, guard) {
 
 function updatePlayer() {
   if (!player) return;
-  setStance(player, held.down, held.guard);
-  player.moveIntent = Number(held.right) - Number(held.left);
+  updateHuman(player, held);
+}
+
+function updateHuman(f, input) {
+  setStance(f, input.down, input.guard);
+  f.moveIntent = Number(input.right) - Number(input.left);
 }
 
 function updateAI(dt) {
@@ -523,7 +629,7 @@ function integrateBody(f, dt) {
 function updateFighter(f, dt) {
   const other = f === player ? cpu : player;
   if (f.action === "idle") {
-    const speed = stats[f.kind].speed * (f.isPlayer ? 1 : .82);
+    const speed = stats[f.kind].speed * (humanFighter(f) ? 1 : .82);
     const desired = f.crouching || f.guarding ? 0 : f.moveIntent * speed;
     const acceleration = f.grounded ? (desired ? 29 : 36) : 3.5;
     f.vx += (desired - f.vx) * (1 - Math.exp(-acceleration * dt));
@@ -585,7 +691,7 @@ function updateFighter(f, dt) {
       f.actionDuration = 0;
       f.moveSpec = null;
       f.lowAttack = f.airAttack = false;
-      setStance(f, f.isPlayer ? held.down : f.crouchTime > 0, f.isPlayer ? held.guard : f.guardTime > 0);
+      setStance(f, humanFighter(f) ? fighterInput(f).down : f.crouchTime > 0, humanFighter(f) ? fighterInput(f).guard : f.guardTime > 0);
     }
   }
   if (f.queuedAction && f.queueTime > 0) {
@@ -683,7 +789,7 @@ function queueAction(f, type) {
 function jump(f) {
   if (state !== "playing" || !f) return false;
   if (!f.grounded || isLocked(f)) {
-    if (f.isPlayer) queueAction(f, "jump");
+    if (humanFighter(f)) queueAction(f, "jump");
     return false;
   }
   f.crouching = f.guarding = false;
@@ -701,15 +807,15 @@ function attack(f, type) {
   if (type === "teleport" && f.kind !== "blotta") return false;
   if (type === "slam" && f.kind !== "tunki") return false;
   if (isLocked(f)) {
-    if (f.isPlayer) queueAction(f, type);
+    if (humanFighter(f)) queueAction(f, type);
     return false;
   }
   const cost = type === "special" ? 35 : ["teleport", "slam"].includes(type) ? 30 : 0;
   if (cost && (f.power < cost || f.specialCooldown > 0 || (!f.grounded && type !== "slam"))) {
-    if (f.isPlayer) sfx("empty");
+    if (humanFighter(f)) sfx("empty");
     return false;
   }
-  const low = f.grounded && (f.isPlayer ? held.down : f.crouching) && !cost;
+  const low = f.grounded && (humanFighter(f) ? fighterInput(f).down : f.crouching) && !cost;
   if (low && type === "punch") type = "uppercut";
   stopFighterSound(f);
   f.moveSpec = MOVES[low && type === "kick" ? "lowKick" : type];
@@ -731,12 +837,13 @@ function attack(f, type) {
     f.vx = 0;
     if (!f.grounded) f.vy = -90;
   } else if (type === "teleport") {
-    f.teleportDirection = f.isPlayer ? Number(held.right) - Number(held.left) : 0;
+    f.teleportDirection = humanFighter(f) ? Number(fighterInput(f).right) - Number(fighterInput(f).left) : 0;
     f.teleportDone = f.teleportSmokeStarted = false;
     f.vx = f.vy = 0;
   } else if (type === "special") {
     f.specialSpawned = false;
     f.specialStyle = f.kind === "sergio" ? (f.projectileToggle++ % 2 ? "bottle" : "meat") : f.kind === "tunki" ? "flowers" : f.kind === "marechal" ? "lightning" : "ki";
+    if (COMBAT_AUDIO[f.specialStyle]) f.attackSound = startCombatSound(f.specialStyle);
     f.vx = 0;
   } else if (type === "kick" && !low && f.grounded) {
     f.vy = -260;
@@ -748,7 +855,7 @@ function attack(f, type) {
   }
   if (["punch", "uppercut", "kick"].includes(type)) {
     f.attackSound = startCombatSound(f.kind === "sergio" && type === "punch" ? "belly" : "general");
-  } else if (type !== "special" || !["lightning", "meat"].includes(f.specialStyle)) sfx(type);
+  } else if (type !== "special" || !COMBAT_AUDIO[f.specialStyle]) sfx(type);
   return true;
 }
 
@@ -761,8 +868,10 @@ function spawnProjectile(owner, style) {
   const y = owner.y - 143 * FIGHTER_SCALE;
   addEffect("ring", x, y, powerColor(owner.kind), 36, .22);
   burst(x, y, powerColor(owner.kind), 5);
+  const sound = COMBAT_AUDIO[style] ? owner.attackSound || startCombatSound(style) : null;
+  if (sound === owner.attackSound) owner.attackSound = null;
   projectiles.push({
-    sound: ["lightning", "meat"].includes(style) ? startCombatSound(style) : null,
+    sound,
     owner, style, x, y, prevX: x, prevY: y, prevSpin: 0,
     vx: owner.facing * config.speed, vy: style === "ki" || style === "lightning" ? 0 : -42,
     damage: config.damage, radius: config.radius * FIGHTER_SCALE, life: 2.5, spin: 0, trailTime: 0, trail: []
@@ -812,6 +921,7 @@ function hit(target, damage, knockX, knockY, attacker, contact = {}) {
     && (!contact.overhead || !target.crouching)
     && ["idle", "block"].includes(target.action);
   if (blocking) {
+    addScore(target, 25);
     target.health = Math.max(0, target.health - (contact.projectile ? 1 : 0));
     target.power = Math.min(100, target.power + 4);
     target.action = "block";
@@ -826,6 +936,7 @@ function hit(target, damage, knockX, knockY, attacker, contact = {}) {
     sfx("block");
   } else {
     stopFighterSound(target);
+    addScore(attacker, Math.min(damage, target.health) * 10);
     target.health = Math.max(0, target.health - damage);
     target.power = Math.min(100, target.power + damage * .8);
     attacker.power = Math.min(100, attacker.power + damage * .7);
@@ -848,7 +959,7 @@ function hit(target, damage, knockX, knockY, attacker, contact = {}) {
     sfx("hit");
     if (navigator.vibrate) navigator.vibrate(15);
   }
-  suspendCombatSounds();
+  suspendCombatSounds(false);
   if (target.health <= 0 && !resolvingContacts) finishRound(attacker, "K.O.");
   return true;
 }
@@ -859,6 +970,12 @@ function finishRound(winner, reason) {
   else if (winner === cpu) match.cpuWins++;
   match.repeat = !winner;
   match.complete = match.playerWins >= 2 || match.cpuWins >= 2;
+  if (winner) addScore(winner, 1000 + Math.ceil(roundTime) * 5 + Math.round(winner.health) * 10);
+  if (match.complete) {
+    match.winner = winner === player ? 0 : 1;
+    addScore(winner, 2000);
+    stopMusic();
+  }
   state = match.complete ? "finished" : "roundOver";
   resultElapsed = 0;
   stopRoundVoice();
@@ -866,12 +983,112 @@ function finishRound(winner, reason) {
   setPauseUI(false);
   clearHeld();
   ui.resultKicker.textContent = match.playerWins + " — " + match.cpuWins;
-  ui.resultTitle.textContent = winner === player ? "¡GANASTE EL COMBATE!" : stats[cpu.kind].name + " GANA";
+  ui.resultTitle.textContent = winner ? fighterLabel(winner) + " GANA" : "EMPATE";
+  document.getElementById("finalScore").textContent = winner ? "PUNTAJE FINAL · " + match.scores[winner === player ? 0 : 1].toLocaleString("es-AR") : "";
   document.getElementById("roundNotice").textContent = !winner ? "EMPATE · SE REPITE EL ROUND" :
-    stats[winner.kind].name + " GANA EL ROUND · " + match.playerWins + " — " + match.cpuWins;
+    fighterLabel(winner) + " GANA EL ROUND · " + match.playerWins + " — " + match.cpuWins;
   updateHud();
   announce(reason, 750);
   sfx(match.complete ? winner === player ? "win" : "lose" : "confirm");
+}
+
+function addScore(f, points) {
+  if (!f || !match.scores) return;
+  const slot = f === player ? 0 : 1;
+  match.scores[slot] = Math.min(1000000, match.scores[slot] + Math.max(0, Math.round(points)));
+}
+
+function showGameOver() {
+  match.endShown = true;
+  ui.resultKicker.textContent = "GAME OVER";
+  const humanWinner = match.winner === 0 || gameMode === "versus";
+  document.getElementById("winnerForm").hidden = !humanWinner;
+  document.getElementById("cpuResultNote").hidden = humanWinner;
+  if (humanWinner) {
+    const input = document.getElementById("winnerName");
+    input.value = "";
+    document.getElementById("saveError").textContent = "";
+    document.getElementById("saveScoreBtn").disabled = false;
+    // Mobile players tap the field deliberately, preventing a sudden keyboard resize.
+    if (!mobileInput()) input.focus?.();
+  }
+}
+
+const RANKING_API = "https://kp-fighter-ranking.sebastiandc99.chatgpt.site/api/ranking";
+let rankingRequest = 0;
+
+async function rankingFetch(url, options = {}) {
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timeout = controller ? setTimeout(() => controller.abort(), 15000) : null;
+  try {
+    const response = await fetch(url, {...options, signal: controller?.signal, credentials: "omit", cache: "no-store"});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "No se pudo conectar con el ranking.");
+    return data;
+  } finally { if (timeout) clearTimeout(timeout); }
+}
+
+async function saveWinner(event) {
+  event.preventDefault();
+  if (state !== "finished" || !match.complete || !match.endShown || match.saved || match.saving || (gameMode === "solo" && match.winner !== 0)) return;
+  const input = document.getElementById("winnerName");
+  const name = input.value.normalize("NFKC").replace(/[\u0000-\u001f\u007f-\u009f]/g, "").replace(/\s+/g, " ").trim();
+  const message = document.getElementById("saveError");
+  if (!name || name.length > 20) { message.textContent = "Escribí un nombre de 1 a 20 caracteres."; input.focus?.(); return; }
+  const result = match;
+  const button = document.getElementById("saveScoreBtn");
+  result.saving = true; button.disabled = true; message.textContent = "Guardando puntaje…";
+  try {
+    await rankingFetch(RANKING_API, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({
+      id: result.id, name, score: result.scores[result.winner], mode: gameMode,
+      character: result.winner === 0 ? result.playerKind : result.cpuKind
+    })});
+    result.saved = true;
+    if (state === "finished" && match === result) await showRanking(result.id);
+  } catch (_) {
+    if (match === result) message.textContent = "No se pudo guardar. Tu nombre sigue acá; revisá la conexión y volvé a intentar.";
+  } finally { result.saving = false; button.disabled = false; }
+}
+
+async function showRanking(highlight = null) {
+  const requestId = ++rankingRequest;
+  state = "ranking";
+  clearHeld(); stopAllCombatSounds(); stopRoundVoice(); stopMusic();
+  setPauseUI(false);
+  showScreen(ui.rankingScreen);
+  const rows = document.getElementById("rankingRows");
+  rows.replaceChildren();
+  const status = document.getElementById("rankingStatus");
+  status.textContent = "Cargando ranking completo…";
+  document.getElementById("rankingRetryBtn").hidden = true;
+  try {
+    let cursor = null;
+    const entries = new Map();
+    const cursors = new Set();
+    do {
+      const data = await rankingFetch(RANKING_API + (cursor ? "?after=" + encodeURIComponent(cursor) : ""));
+      if (state !== "ranking" || requestId !== rankingRequest) return;
+      if (!Array.isArray(data.entries)) throw new Error("Invalid ranking response");
+      data.entries.forEach(entry => { if (entry && typeof entry.name === "string" && Number.isSafeInteger(entry.score)) entries.set(entry.id, entry); });
+      cursor = data.next || null;
+      if (cursor && cursors.has(cursor)) throw new Error("Repeated ranking page");
+      cursors.add(cursor);
+    } while (cursor);
+    const sorted = [...entries.values()].sort((a,b) => b.score - a.score || a.createdAt - b.createdAt || String(a.id).localeCompare(String(b.id)));
+    for (const [index,entry] of sorted.entries()) {
+      const row = document.createElement("tr");
+      if (entry.id === highlight) row.classList.add("new-record");
+      for (const value of [index + 1, entry.name, entry.score.toLocaleString("es-AR"), entry.mode === "versus" ? "2P" : "1P"]) {
+        const cell = document.createElement("td"); cell.textContent = String(value); row.appendChild(cell);
+      }
+      rows.appendChild(row);
+    }
+    status.textContent = sorted.length ? sorted.length + " resultados · mayor a menor · ranking compartido" : "Todavía no hay resultados. ¡El primero puede ser tuyo!";
+  } catch (_) {
+    if (state !== "ranking" || requestId !== rankingRequest) return;
+    status.textContent = "No se pudo cargar el ranking. Revisá la conexión y reintentá.";
+    document.getElementById("rankingRetryBtn").hidden = false;
+  }
 }
 
 function isLocked(f) {
@@ -1570,11 +1787,14 @@ function updateHud() {
   ui.leftPower.style.width = `${player.power}%`;
   ui.rightPower.style.width = `${cpu.power}%`;
   ui.timer.textContent = String(Math.ceil(roundTime)).padStart(2, "0");
+  document.getElementById("leftScore").textContent = String(match.scores?.[0] || 0).padStart(6, "0");
+  document.getElementById("rightScore").textContent = String(match.scores?.[1] || 0).padStart(6, "0");
   document.getElementById("roundLabel").textContent = ROUND_AUDIO[match.round].title + " · " + match.playerWins + " — " + match.cpuWins;
   document.querySelectorAll("#leftRounds i").forEach((dot, index) => dot.classList.toggle("won", index < match.playerWins));
   document.querySelectorAll("#rightRounds i").forEach((dot, index) => dot.classList.toggle("won", index < match.cpuWins));
   document.querySelector('[data-tap="special"]').classList.toggle("ready", player.power >= 35 && player.specialCooldown === 0);
   ui.abilityBtn.classList.toggle("ready", player.power >= 30 && player.specialCooldown === 0);
+  document.getElementById("abilityBtn2").classList.toggle("ready", cpu.power >= 30 && cpu.specialCooldown === 0);
 }
 
 function setPauseUI(paused) {
@@ -1582,6 +1802,7 @@ function setPauseUI(paused) {
   ui.pauseBtn.classList.toggle("resume", paused);
   ui.pauseBtn.setAttribute("aria-label", paused ? "Reanudar juego" : "Pausar juego");
   ui.gameScreen.classList.toggle("paused", paused);
+  document.getElementById("pauseMenu").hidden = !paused;
   document.getElementById("pauseHelp").hidden = !paused;
 }
 
@@ -1591,13 +1812,16 @@ function togglePause() {
     state = "paused";
     stopRoundVoice();
     suspendCombatSounds();
+    pauseMusic();
     clearHeld();
     fighters.forEach(f => { f.queuedAction = null; });
     setPauseUI(true);
-    announce("PAUSA");
+    ui.announcement.classList.remove("show");
+    document.getElementById("resumeBtn").focus?.();
   } else if (state === "paused") {
     state = pauseFrom;
     syncCombatSounds();
+    syncMusic();
     clearHeld();
     lastTime = performance.now();
     accumulator = 0;
@@ -1622,7 +1846,7 @@ function loop(now) {
   }
   renderAlpha = state === "paused" ? 1 : accumulator / STEP;
   if (["intro", "playing", "paused", "roundOver", "finished"].includes(state)) {
-    draw();
+    if (state !== "paused") draw();
     updateHud();
   }
   requestAnimationFrame(loop);
@@ -1635,6 +1859,8 @@ function ensureAudio() {
   if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
   [1, 2, 3].forEach(loadRoundVoice);
   Object.keys(COMBAT_AUDIO).forEach(loadCombatAudio);
+  loadMusic(EXTRA_AUDIO.selection);
+  if (musicTrack) loadMusic(musicTrack);
 }
 
 function loadCombatAudio(name) {
@@ -1648,7 +1874,7 @@ function loadCombatAudio(name) {
 }
 
 function startCombatSound(name) {
-  const voice = { name, elapsed: 0, source: null, gain: null };
+  const voice = { name, elapsed: 0, source: null, gain: null, audibleAt: null };
   combatSounds.add(voice);
   ensureAudio();
   syncCombatSounds();
@@ -1665,10 +1891,21 @@ function disconnectCombatVoice(voice) {
   if (voice.gain) { voice.gain.disconnect(); voice.gain = null; }
 }
 
-function stopCombatSound(voice) {
+function stopCombatSound(voice, immediate = false) {
   if (!voice) return;
-  disconnectCombatVoice(voice);
   combatSounds.delete(voice);
+  const minAudible = ["lightning", "meat", "flowers"].includes(voice.name) ? .08 : 0;
+  const heard = voice.audibleAt === null ? 0 : Math.max(0, (audioCtx?.currentTime ?? voice.elapsed) - voice.audibleAt);
+  if (!immediate && voice.source && minAudible > heard && !muted && state === "playing") {
+    // At point-blank range retain only a short attack transient, never the whole clip.
+    soundTails.add(voice);
+    voice.source.loop = false;
+    voice.source.onended = () => { soundTails.delete(voice); disconnectCombatVoice(voice); };
+    voice.source.stop((audioCtx.currentTime ?? 0) + minAudible - heard);
+    return;
+  }
+  disconnectCombatVoice(voice);
+  soundTails.delete(voice);
 }
 
 function stopFighterSound(f) {
@@ -1677,11 +1914,14 @@ function stopFighterSound(f) {
 }
 
 function stopAllCombatSounds() {
-  for (const voice of combatSounds) stopCombatSound(voice);
+  stopSynthSounds();
+  for (const voice of [...combatSounds, ...soundTails]) stopCombatSound(voice, true);
   fighters.forEach(f => { f.attackSound = null; });
 }
 
-function suspendCombatSounds() {
+function suspendCombatSounds(includeTails = true) {
+  if (includeTails) stopSynthSounds();
+  if (includeTails) for (const voice of soundTails) stopCombatSound(voice, true);
   for (const voice of combatSounds) disconnectCombatVoice(voice);
 }
 
@@ -1701,6 +1941,7 @@ function syncCombatSounds() {
     source.connect(gain).connect(audioCtx.destination);
     voice.source = source;
     voice.gain = gain;
+    voice.audibleAt = audioCtx.currentTime ?? voice.elapsed;
     source.start(0, cue.start + voice.elapsed % (source.loopEnd - cue.start));
   }
 }
@@ -1718,6 +1959,51 @@ function loadRoundVoice(round = match.round) {
     .then(bytes => audioCtx.decodeAudioData(bytes))
     .then(buffer => { cue.buffer = buffer; syncRoundVoice(); })
     .catch(() => { /* Keep the round playable with the synthesized cue if loading fails. */ });
+}
+
+function selectMusic(usage = "fight") {
+  if (usage === "selection" && musicTrack?.usage === usage) { syncMusic(); return; }
+  stopMusic();
+  musicTrack = usage === "selection" ? EXTRA_AUDIO.selection : EXTRA_AUDIO.music[Math.floor(Math.random() * EXTRA_AUDIO.music.length)];
+  ensureAudio();
+  syncMusic();
+}
+
+function loadMusic(track) {
+  if (!audioCtx || track.buffer || track.loading || typeof fetch !== "function") return;
+  track.loading = fetch(track.src).then(response => {
+    if (!response.ok) throw new Error("Music unavailable");
+    return response.arrayBuffer();
+  }).then(bytes => audioCtx.decodeAudioData(bytes)).then(buffer => { track.buffer = buffer; syncMusic(); }).catch(() => {});
+}
+
+function syncMusic() {
+  const allowed = musicTrack?.usage === "selection" ? ["select", "stage"] : ["intro", "playing", "roundOver"];
+  if (!allowed.includes(state) || muted || !audioCtx || audioCtx.state !== "running" || !musicTrack?.buffer) return;
+  if (musicGain) musicGain.gain.value = state === "intro" ? .10 : musicTrack.usage === "selection" ? .28 : .20;
+  if (musicSource) return;
+  musicSource = audioCtx.createBufferSource();
+  musicGain = audioCtx.createGain();
+  musicSource.buffer = musicTrack.buffer;
+  musicSource.loop = true;
+  musicGain.gain.value = state === "intro" ? .10 : musicTrack.usage === "selection" ? .28 : .20;
+  musicSource.connect(musicGain).connect(audioCtx.destination);
+  musicSource.start(0, musicElapsed % musicTrack.buffer.duration);
+  musicStartedAt = audioCtx.currentTime || 0;
+}
+
+function pauseMusic() {
+  if (musicSource) {
+    if (Number.isFinite(audioCtx.currentTime)) musicElapsed += Math.max(0, audioCtx.currentTime - musicStartedAt);
+    try { musicSource.stop(); } catch (_) {} musicSource.disconnect(); musicSource = null;
+  }
+  if (musicGain) { musicGain.disconnect(); musicGain = null; }
+}
+
+function stopMusic() { pauseMusic(); musicTrack = null; musicElapsed = 0; }
+function advanceMusic(dt) {
+  if (!Number.isFinite(audioCtx?.currentTime)) musicElapsed += dt;
+  syncMusic();
 }
 
 function stopRoundVoice() {
@@ -1744,8 +2030,14 @@ function syncRoundVoice() {
   roundVoiceStarted = true;
 }
 
+function stopSynthSounds() {
+  soundGeneration++;
+  for (const voice of synthVoices) { try { voice.osc.stop(); } catch (_) {} voice.osc.disconnect(); voice.gain.disconnect(); }
+  synthVoices.clear();
+}
+
 function tone(freq, duration, type = "square", volume = .045, slide = 0) {
-  if (muted) return;
+  if (muted || state === "paused") return;
   ensureAudio();
   if (!audioCtx) return;
   const osc = audioCtx.createOscillator();
@@ -1756,68 +2048,61 @@ function tone(freq, duration, type = "square", volume = .045, slide = 0) {
   gain.gain.setValueAtTime(volume, audioCtx.currentTime);
   gain.gain.exponentialRampToValueAtTime(.001, audioCtx.currentTime + duration);
   osc.connect(gain).connect(audioCtx.destination);
+  const voice = {osc, gain}; synthVoices.add(voice);
+  osc.onended = () => { synthVoices.delete(voice); osc.disconnect(); gain.disconnect(); };
   osc.start();
   osc.stop(audioCtx.currentTime + duration);
 }
 
 function sfx(name) {
-  if (muted) return;
+  if (muted || state === "paused") return;
+  const generation = soundGeneration;
+  const later = (callback, delay) => setTimeout(() => { if (generation === soundGeneration) callback(); }, delay);
   const sounds = {
-    start: () => { tone(130, .12); setTimeout(() => tone(195, .18), 110); },
+    start: () => { tone(130, .12); later(() => tone(195, .18), 110); },
     move: () => tone(290, .055, "square", .025, 70),
-    confirm: () => { tone(330, .08, "square", .035); setTimeout(() => tone(660, .14, "square", .035), 70); },
-    fight: () => { tone(260, .12, "sawtooth", .05, 380); setTimeout(() => tone(520, .18), 100); },
+    confirm: () => { tone(330, .08, "square", .035); later(() => tone(660, .14, "square", .035), 70); },
+    fight: () => { tone(260, .12, "sawtooth", .05, 380); later(() => tone(520, .18), 100); },
     jump: () => tone(170, .11, "square", .025, 180),
     punch: () => tone(95, .08, "sawtooth", .04, -40),
     kick: () => tone(130, .12, "sawtooth", .045, -80),
     hit: () => { tone(62, .13, "square", .07, -22); tone(145, .05, "sawtooth", .035, -80); },
-    special: () => { tone(220, .23, "sawtooth", .045, 380); setTimeout(() => tone(540, .12, "square", .03, -100), 80); },
+    special: () => { tone(220, .23, "sawtooth", .045, 380); later(() => tone(540, .12, "square", .03, -100), 80); },
     lightning: () => { tone(960, .16, "sawtooth", .038, -720); tone(140, .2, "square", .026, 510); },
     teleport: () => { tone(400, .23, "sine", .04, -330); tone(95, .36, "triangle", .03, 620); },
     slam: () => { tone(88, .22, "triangle", .075, -60); tone(48, .14, "sawtooth", .045, -20); },
     block: () => tone(720, .07, "triangle", .05, -370),
     empty: () => tone(70, .08, "square", .025),
-    win: () => [0, 130, 260].forEach((d, i) => setTimeout(() => tone([330, 440, 660][i], .24), d)),
-    lose: () => { tone(220, .25, "sawtooth", .04, -100); setTimeout(() => tone(105, .45, "square", .04, -55), 180); }
+    win: () => [0, 130, 260].forEach((d, i) => later(() => tone([330, 440, 660][i], .24), d)),
+    lose: () => { tone(220, .25, "sawtooth", .04, -100); later(() => tone(105, .45, "square", .04, -55), 180); }
   };
   (sounds[name] || (() => {}))();
 }
 
-ui.startBtn.addEventListener("click", () => {
-  requestMobileLandscape();
-  openSelection();
-});
-
-document.querySelectorAll("[data-pick]").forEach(btn => {
-  btn.addEventListener("click", () => chooseFighter(btn.dataset.pick));
-  btn.addEventListener("dblclick", () => {
-    chooseFighter(btn.dataset.pick, false);
-    sfx("confirm");
-    openStageSelection();
-  });
-});
-
-ui.confirmBtn.addEventListener("click", () => {
-  requestMobileLandscape();
-  sfx("confirm");
-  openStageSelection();
-});
-
+ui.startBtn.addEventListener("click", () => { requestMobileLandscape(); openModeSelection(); });
+document.getElementById("soloBtn").addEventListener("click", () => startMode("solo"));
+document.getElementById("versusBtn").addEventListener("click", () => startMode("versus"));
+document.getElementById("modeBackBtn").addEventListener("click", mainMenu);
+document.getElementById("fighterBackBtn").addEventListener("click", backFromFighters);
+document.querySelectorAll("[data-pick]").forEach(btn => btn.addEventListener("click", () => chooseFighter(btn.dataset.pick)));
+ui.confirmBtn.addEventListener("click", () => { requestMobileLandscape(); sfx("confirm"); confirmFighter(); });
 document.querySelectorAll("[data-stage]").forEach(button => button.addEventListener("click", () => chooseStage(button.dataset.stage)));
 document.getElementById("stageBackBtn").addEventListener("click", openSelection);
 document.getElementById("stageConfirmBtn").addEventListener("click", () => { requestMobileLandscape(); startGame(playerChoice); });
-document.getElementById("rematchBtn").addEventListener("click", () => startGame(playerChoice, cpu.kind));
-document.getElementById("selectBtn").addEventListener("click", () => {
-  openSelection();
-});
 ui.pauseBtn.addEventListener("click", togglePause);
-
+document.getElementById("resumeBtn").addEventListener("click", () => { if (state === "paused") togglePause(); });
+document.getElementById("quitBtn").addEventListener("click", mainMenu);
+document.getElementById("titleRankingBtn").addEventListener("click", showRanking);
+document.getElementById("rankingMenuBtn").addEventListener("click", mainMenu);
+document.getElementById("newGameBtn").addEventListener("click", openModeSelection);
+document.getElementById("rankingRetryBtn").addEventListener("click", showRanking);
+document.getElementById("winnerForm").addEventListener("submit", saveWinner);
 ui.soundBtn.addEventListener("click", () => {
   muted = !muted;
-  if (muted) { stopRoundVoice(); suspendCombatSounds(); }
+  if (muted) { stopRoundVoice(); suspendCombatSounds(); pauseMusic(); }
   ui.soundBtn.textContent = muted ? "🔇" : "🔊";
   ui.soundBtn.setAttribute("aria-label", muted ? "Activar sonido" : "Desactivar sonido");
-  if (!muted) { ensureAudio(); syncRoundVoice(); syncCombatSounds(); if (state !== "intro") sfx("start"); }
+  if (!muted) { ensureAudio(); syncRoundVoice(); syncCombatSounds(); syncMusic(); }
 });
 
 const HOLD_KEYS = {
@@ -1825,36 +2110,58 @@ const HOLD_KEYS = {
   KeyS: "down", ArrowDown: "down", KeyI: "guard", ShiftLeft: "guard", ShiftRight: "guard"
 };
 const TAP_KEYS = { KeyW: "jump", ArrowUp: "jump", KeyJ: "punch", KeyK: "kick", KeyL: "special", KeyH: "ability" };
-
+const P2_HOLD_KEYS = { ArrowLeft: "left", ArrowRight: "right", ArrowDown: "down", Digit0: "guard", Numpad0: "guard", ControlRight: "guard" };
+const P2_TAP_KEYS = { ArrowUp: "jump", Digit7: "punch", Numpad1: "punch", Digit8: "kick", Numpad2: "kick", Digit9: "special", Numpad3: "special", Digit6: "ability", Numpad4: "ability" };
+function keyBinding(code) {
+  if (gameMode === "versus" && (code in P2_HOLD_KEYS || code in P2_TAP_KEYS)) return {slot: 2, hold: P2_HOLD_KEYS[code], tap: P2_TAP_KEYS[code]};
+  return {slot: 1, hold: HOLD_KEYS[code], tap: TAP_KEYS[code]};
+}
 function refreshHeld() {
-  Object.keys(held).forEach(action => {
-    held[action] = [...keyHolds].some(code => HOLD_KEYS[code] === action)
-      || [...touchHolds.values()].some(value => value === action);
+  [held,held2].forEach((input,index) => {
+    Object.keys(input).forEach(action => {
+      input[action] = [...keyHolds].some(code => { const b = keyBinding(code); return b.slot === index + 1 && b.hold === action; })
+        || [...touchHolds.values()].some(value => (value.slot || 1) === index + 1 && (value.action || value) === action);
+    });
   });
 }
-
-function performAction(action) {
-  if (state !== "playing") return;
-  updatePlayer();
-  if (action === "jump") jump(player);
-  else if (action === "ability") attack(player, stats[player.kind].ability);
-  else attack(player, action);
+function refreshHumans() { updatePlayer(); if (cpu && gameMode === "versus") updateHuman(cpu, held2); }
+function performAction(action, slot = 1) {
+  if (state !== "playing" || (slot === 2 && gameMode !== "versus")) return;
+  const f = slot === 2 ? cpu : player;
+  if (!f) return;
+  refreshHumans();
+  if (action === "jump") jump(f);
+  else if (action === "ability") attack(f, stats[f.kind].ability);
+  else attack(f, action);
 }
-
 window.addEventListener("keydown", event => {
+  // Name entry and native buttons keep their own keyboard behavior.
+  if (event.target?.tagName === "INPUT" || event.target?.tagName === "TEXTAREA" || state === "ranking") return;
   const code = event.code || (event.key === " " ? "Space" : event.key.length === 1 ? "Key" + event.key.toUpperCase() : event.key);
-  if (code in HOLD_KEYS || code in TAP_KEYS || ["Space", "Enter", "Escape"].includes(code)) event.preventDefault();
+  if (state === "paused") {
+    if (["Space", "Escape"].includes(code)) { event.preventDefault(); if (!event.repeat) togglePause(); }
+    return;
+  }
+  const binding = keyBinding(code);
+  if (binding.hold || binding.tap || ["Space", "Enter", "Escape"].includes(code)) event.preventDefault();
   if (event.repeat) return;
-  if (state === "title") {
-    if (code === "Enter" || code === "Space") openSelection();
+  if (state === "title") { if (["Enter", "Space"].includes(code)) openModeSelection(); return; }
+  if (state === "mode") {
+    if (["KeyA", "KeyD", "ArrowLeft", "ArrowRight"].includes(code)) chooseMode(modeChoice === "solo" ? "versus" : "solo");
+    if (["Enter", "Space"].includes(code)) startMode(modeChoice);
+    if (code === "Digit1") startMode("solo");
+    if (code === "Digit2") startMode("versus");
+    if (code === "Escape") mainMenu();
     return;
   }
   if (state === "select") {
     if (["KeyA", "KeyD", "ArrowLeft", "ArrowRight"].includes(code)) {
       const direction = code === "KeyA" || code === "ArrowLeft" ? -1 : 1;
-      chooseFighter(roster[(roster.indexOf(playerChoice) + direction + roster.length) % roster.length]);
+      const selected = selectionPlayer === 2 ? opponentChoice : playerChoice;
+      chooseFighter(roster[(roster.indexOf(selected) + direction + roster.length) % roster.length]);
     }
-    if (["Enter", "Space", "KeyJ"].includes(code)) openStageSelection();
+    if (["Enter", "Space", "KeyJ", "Numpad1"].includes(code)) confirmFighter();
+    if (code === "Escape") backFromFighters();
     return;
   }
   if (state === "stage") {
@@ -1868,60 +2175,45 @@ window.addEventListener("keydown", event => {
   }
   if (code === "Space" || code === "Escape") { togglePause(); return; }
   if (state !== "playing") return;
-  if (code in HOLD_KEYS) {
-    keyHolds.add(code);
-    refreshHeld();
-    updatePlayer();
-  }
-  if (code in TAP_KEYS) performAction(TAP_KEYS[code]);
+  if (binding.hold) { keyHolds.add(code); refreshHeld(); refreshHumans(); }
+  if (binding.tap) performAction(binding.tap, binding.slot);
 });
-
 window.addEventListener("keyup", event => {
   const code = event.code || (event.key.length === 1 ? "Key" + event.key.toUpperCase() : event.key);
-  keyHolds.delete(code);
-  refreshHeld();
-  if (state === "playing") updatePlayer();
+  keyHolds.delete(code); refreshHeld();
+  if (state === "playing") refreshHumans();
 });
-
 function pauseOnLeave() {
   clearHeld();
   if (state === "playing" || state === "intro" || state === "roundOver") togglePause();
 }
 window.addEventListener("blur", pauseOnLeave);
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) pauseOnLeave();
-});
-
+document.addEventListener("visibilitychange", () => { if (document.hidden) pauseOnLeave(); });
 document.querySelectorAll("[data-hold]").forEach(btn => {
+  const slot = Number(btn.dataset.player || 1);
   btn.addEventListener("pointerdown", event => {
     event.preventDefault();
-    if (state !== "playing") return;
+    if (state !== "playing" || (slot === 2 && gameMode !== "versus")) return;
     if (event.pointerType === "touch") document.body.classList.add("touch-device");
     btn.setPointerCapture(event.pointerId);
-    touchHolds.set(event.pointerId, btn.dataset.hold);
-    refreshHeld();
-    updatePlayer();
-    btn.classList.add("active");
+    touchHolds.set(event.pointerId, {slot, action: btn.dataset.hold});
+    refreshHeld(); refreshHumans(); btn.classList.add("active");
   });
   const release = event => {
-    touchHolds.delete(event.pointerId);
-    refreshHeld();
-    if (state === "playing") updatePlayer();
-    btn.classList.toggle("active", [...touchHolds.values()].includes(btn.dataset.hold));
+    touchHolds.delete(event.pointerId); refreshHeld();
+    if (state === "playing") refreshHumans();
+    btn.classList.toggle("active", [...touchHolds.values()].some(v => v.slot === slot && v.action === btn.dataset.hold));
   };
   ["pointerup", "pointercancel", "lostpointercapture"].forEach(name => btn.addEventListener(name, release));
 });
-
 document.querySelectorAll("[data-tap]").forEach(btn => {
   btn.addEventListener("pointerdown", event => {
     event.preventDefault();
     if (state !== "playing") return;
-    btn.setPointerCapture(event.pointerId);
-    btn.classList.add("active");
-    performAction(btn.dataset.tap);
+    btn.setPointerCapture(event.pointerId); btn.classList.add("active");
+    performAction(btn.dataset.tap, Number(btn.dataset.player || 1));
   });
-  ["pointerup", "pointercancel", "lostpointercapture"].forEach(name =>
-    btn.addEventListener(name, () => btn.classList.remove("active")));
+  ["pointerup", "pointercancel", "lostpointercapture"].forEach(name => btn.addEventListener(name, () => btn.classList.remove("active")));
 });
 
 document.addEventListener("pointerdown", event => {
@@ -1939,4 +2231,5 @@ window.addEventListener("resize", syncViewport);
 window.addEventListener("orientationchange", syncViewport);
 document.addEventListener("fullscreenchange", syncViewport);
 syncViewport();
+if (window.location?.search && new URLSearchParams(window.location.search).has("ranking")) showRanking();
 requestAnimationFrame(loop);
