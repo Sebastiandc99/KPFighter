@@ -36,14 +36,14 @@ La Tunki lanza flores con `L`. Con `H` salta hacia el rival y cae con un aplasta
 - **La Tunki:** proyectiles de flores, patadas y salto aplastante. Conserva la ropa negra y rosa y la panza prominente de su diseño.
 - **Marechal:** alto y delgado, con sombrero de paja y atuendo blanco y azul. Camina, salta, golpea, patea, se agacha y se cubre con los controles básicos. Lanza rayos desde las manos con `L` o **PODER** en celular (35 de energía).
 
-El rival se elige entre los demás luchadores y es controlado por la máquina. Cuando Blotta participa, antes del combate lanza su desafío: “Te voy a echar”.
+El rival se elige entre los demás luchadores y es controlado por la máquina. Cuando Blotta participa, antes del combate lanza su desafío: “Te voy a echar”. Cada round reproduce el audio “Round one, fight” proporcionado por el usuario, junto a los anuncios en pantalla. La voz respeta el silencio y la pausa; al reanudar continúa desde el mismo momento de la introducción.
 
 ## Desarrollo
 
-Sitio estático, sin dependencias. El motor avanza en pasos fijos de 1/120 s y dibuja posiciones interpoladas. Los ataques tienen preparación, contacto y recuperación; se pueden almacenar entradas durante 180 ms y encadenar un golpe conectado con patada o especial.
+Sitio estático, sin dependencias. El motor avanza en pasos fijos de 1/120 s e interpola posiciones, transformaciones corporales y proyectiles. Las poses tienen transiciones breves; los pasos siguen la distancia recorrida y se invierten al retroceder. Los ataques tienen preparación, contacto y recuperación visual progresiva; se pueden almacenar entradas durante 180 ms y encadenar un golpe conectado con patada o especial.
 
 Las hojas de ataques y movimiento incorporan caminar, agacharse, guardia, salto y posturas propias de cada luchador. Sergio y La Tunki tienen una contextura ancha y panza prominente en todos sus sprites. Los nombres, atributos y habilidades están en el catálogo `stats`; la portada no depende del plantel.
 
-La escala de los luchadores se redujo un 10%, con zonas de contacto y efectos ajustados a su tamaño. El dibujado se adapta a la densidad de pantalla, conserva el arte original y añade iluminación suave y sombras de contacto. Las barras de vida ocupan casi todo el ancho superior; el reloj queda encima del encuentro entre ambas.
+La escala de los luchadores se redujo un 10%, con zonas de contacto y efectos ajustados a su tamaño. El dibujado se adapta a la densidad de pantalla, conserva el arte original y añade iluminación suave y sombras de contacto. Las barras de vida llegan a los bordes del área de juego y tienen mayor grosor, también en el diseño horizontal de celular; el reloj queda encima del encuentro entre ambas.
 
 Pruebas de lógica y entrada: `node --test tests/combat.test.cjs`.

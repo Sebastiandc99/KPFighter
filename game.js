@@ -7,6 +7,7 @@ const VIEW_WIDTH = 960;
 const VIEW_HEIGHT = 540;
 const FIGHTER_SCALE = .9;
 const spriteFrames = new Map();
+const poseBlendSurfaces = new Map();
 let drawingScale = 1;
 
 const ui = {
@@ -62,6 +63,7 @@ const stats = {
 const roster = Object.keys(stats);
 const FLOOR = 448;
 const STEP = 1 / 120;
+const INTRO = { voice: 1.35, fight: 3.30, end: 3.95 };
 const MOVES = {
   punch: { startup: .085, active: .095, recovery: .18, reach: 77, damage: 8, knock: 160 },
   kick: { startup: .12, active: .16, recovery: .23, reach: 106, damage: 11, knock: 235 },
@@ -88,6 +90,10 @@ let screenShake = 0;
 let stageTime = 0;
 let muted = false;
 let audioCtx = null;
+let roundVoiceBuffer = null;
+let roundVoiceLoading = null;
+let roundVoiceSource = null;
+let roundVoiceStarted = false;
 let accumulator = 0;
 let renderAlpha = 1;
 let introElapsed = 0;
@@ -143,7 +149,7 @@ function clearHeld() {
 }
 
 function makeFighter(kind, x, isPlayer) {
-  return {
+  const f = {
     kind, x, y: FLOOR, prevX: x, prevY: FLOOR, vx: 0, vy: 0, health: 100, power: 40,
     isPlayer, grounded: true, action: "idle", actionTime: 0,
     actionDuration: 0, animClock: Math.random() * 4, trailClock: 0,
@@ -158,6 +164,10 @@ function makeFighter(kind, x, isPlayer) {
     moveSpec: null, lowAttack: false, airAttack: false, moveIntent: 0,
     walkPhase: 0, combo: 0, comboTime: 0, guardFlash: 0
   };
+  const motion = fighterMotion(f);
+  f.animation = { pose: POSES[kind].idle, fromPose: POSES[kind].idle, mix: 1, prevMix: 1,
+    duration: .055, facing: f.facing, motion, prevMotion: { ...motion } };
+  return f;
 }
 
 function showScreen(screen) {
@@ -182,6 +192,7 @@ function chooseFighter(kind, playSound = true) {
 }
 
 function openSelection() {
+  stopRoundVoice();
   state = "select";
   clearHeld();
   ui.resultPanel.hidden = true;
@@ -194,6 +205,8 @@ function openSelection() {
 }
 
 function startGame(choice) {
+  stopRoundVoice();
+  roundVoiceStarted = false;
   playerChoice = choice;
   const opponents = roster.filter(kind => kind !== choice);
   const other = opponents[Math.floor(Math.random() * opponents.length)];
@@ -257,7 +270,12 @@ function positionSpeech() {
 
 function update(dt) {
   if (!["intro", "playing", "finished"].includes(state)) return;
-  fighters.forEach(f => { f.prevX = f.x; f.prevY = f.y; });
+  fighters.forEach(f => {
+    f.prevX = f.x; f.prevY = f.y;
+    f.animation.prevMotion = { ...f.animation.motion };
+    f.animation.prevMix = f.animation.mix;
+  });
+  projectiles.forEach(p => { p.prevX = p.x; p.prevY = p.y; p.prevSpin = p.spin; });
   stageTime += dt;
   if (announcementTime > 0) {
     announcementTime -= dt;
@@ -266,16 +284,17 @@ function update(dt) {
   if (state === "intro") {
     const before = introElapsed;
     introElapsed += dt;
-    fighters.forEach(f => { f.animClock += dt; });
-    if (before < 1.35 && introElapsed >= 1.35) {
+    fighters.forEach(f => { f.animClock += dt; updateAnimation(f, dt); });
+    if (before < INTRO.voice && introElapsed >= INTRO.voice) {
       ui.speech.hidden = true;
-      announce("ROUND 1", 650);
+      announce("ROUND 1", (INTRO.fight - INTRO.voice - .15) * 1000);
     }
-    if (before < 2.1 && introElapsed >= 2.1) {
+    syncRoundVoice();
+    if (before < INTRO.fight && introElapsed >= INTRO.fight) {
       announce("¡PELEA!", 600);
-      sfx("fight");
+      if (!roundVoiceStarted) sfx("fight");
     }
-    if (introElapsed >= 2.65) state = "playing";
+    if (introElapsed >= INTRO.end) { stopRoundVoice(); state = "playing"; }
     return;
   }
   if (state === "finished") {
@@ -287,6 +306,7 @@ function update(dt) {
       f.actionTime = Math.max(0, f.actionTime - dt);
       f.flash = Math.max(0, f.flash - dt);
       if (!f.grounded) integrateBody(f, dt);
+      updateAnimation(f, dt);
     });
     if (resultElapsed >= .8) ui.resultPanel.hidden = false;
     return;
@@ -324,6 +344,7 @@ function update(dt) {
     hit(contact.target, contact.damage, contact.direction * contact.knock, contact.lift, contact.attacker, contact);
   });
   if (state === "playing") updateProjectiles(dt);
+  fighters.forEach(f => updateAnimation(f, dt));
   updateParticles(dt);
   updateAfterimages(dt);
   screenShake = Math.max(0, screenShake - dt * 32);
@@ -439,7 +460,10 @@ function updateFighter(f, dt) {
     }
   }
   integrateBody(f, dt);
-  if (f.grounded && Math.abs(f.vx) > 18) f.walkPhase += Math.abs(f.vx) * dt / 35;
+  // A full stride follows distance travelled; backsteps play the cycle in reverse.
+  if (f.grounded && f.action === "idle" && !f.crouching && !f.guarding) {
+    f.walkPhase = ((f.walkPhase + f.vx * f.facing * dt / 35) % 4 + 4) % 4;
+  }
 
   if (f.actionTime > 0) {
     f.actionTime = Math.max(0, f.actionTime - dt);
@@ -634,8 +658,10 @@ function spawnProjectile(owner, style) {
     style === "lightning" ? { speed: 560, damage: 13, radius: 15 } :
     style === "flowers" ? { speed: 405, damage: 14, radius: 20 } :
     style === "bottle" ? { speed: 425, damage: 12, radius: 16 } : { speed: 395, damage: 10, radius: 19 };
+  const x = owner.x + owner.facing * 58 * FIGHTER_SCALE;
+  const y = owner.y - 143 * FIGHTER_SCALE;
   projectiles.push({
-    owner, style, x: owner.x + owner.facing * 58 * FIGHTER_SCALE, y: owner.y - 143 * FIGHTER_SCALE,
+    owner, style, x, y, prevX: x, prevY: y, prevSpin: 0,
     vx: owner.facing * config.speed, vy: style === "ki" || style === "lightning" ? 0 : -42,
     damage: config.damage, radius: config.radius * FIGHTER_SCALE, life: 2.5, spin: 0, trailTime: 0
   });
@@ -836,6 +862,12 @@ function poseFor(f) {
   if (f.action === "teleport") return 11;
   if (f.action === "slam") return f.slamLanded ? 11 : f.slamDiving ? POSES.tunki.slam : f.slamLaunched ? 10 : 8;
   if (f.guarding || f.action === "block") return 9;
+  if (["punch", "kick", "special"].includes(f.action) && f.moveSpec) {
+    const elapsed = f.actionDuration - f.actionTime;
+    if (elapsed > f.moveSpec.startup + f.moveSpec.active + f.moveSpec.recovery * .58) {
+      return f.lowAttack ? 8 : !f.grounded ? 10 : POSES[f.kind].idle;
+    }
+  }
   if (f.kind === "marechal" && f.lowAttack && f.action === "kick") return POSES.marechal.sweep;
   if (f.lowAttack) return f.kind === "blotta" && f.action === "kick" ? POSES.blotta.sweep : 8;
   if (f.action === "punch") {
@@ -858,7 +890,7 @@ function poseFor(f) {
 
 function drawShadow(f) {
   if (isVanished(f)) return;
-  const lift = Math.max(0, FLOOR - f.y);
+  const lift = Math.max(0, FLOOR - lerp(f.prevY, f.y, renderAlpha));
   ctx.save();
   const radius = Math.max(18, (stats[f.kind].width + 15) * FIGHTER_SCALE - lift * .035);
   const x = f.prevX + (f.x - f.prevX) * renderAlpha;
@@ -877,15 +909,17 @@ function drawShadow(f) {
 function fighterMotion(f) {
   const motion = { dx: 0, dy: 0, rotation: 0, scaleX: 1, scaleY: 1 };
   const progress = actionProgress(f);
-  const moving = f.grounded && f.action === "idle" && Math.abs(f.vx) > 18;
+  const moving = f.grounded && f.action === "idle" && !f.crouching && !f.guarding && Math.abs(f.vx) > 1;
 
   if (f.action === "idle") {
     if (moving) {
-      const step = Math.sin(f.walkPhase * Math.PI);
-      motion.dy -= Math.abs(step) * 3.4;
-      motion.rotation = step * .018 * f.facing;
-      motion.scaleX += Math.abs(step) * .018;
-      motion.scaleY -= Math.abs(step) * .014;
+      const weight = Math.min(1, Math.abs(f.vx) / stats[f.kind].speed);
+      const step = Math.sin(f.walkPhase * Math.PI / 2);
+      const lift = (1 - Math.cos(f.walkPhase * Math.PI)) * .5;
+      motion.dy -= lift * 2.6 * weight;
+      motion.rotation = (step * .014 - f.vx / 18000) * weight;
+      motion.scaleX += lift * .009 * weight;
+      motion.scaleY -= lift * .008 * weight;
     } else if (f.grounded) {
       const breath = Math.sin(f.animClock * 3.7);
       motion.dy -= 1.4 + breath * 1.15;
@@ -895,8 +929,10 @@ function fighterMotion(f) {
   }
 
   if (!f.grounded && f.action === "idle") {
-    motion.dy -= Math.sin(f.animClock * 5) * 1.5;
-    motion.rotation -= f.facing * Math.max(-.045, Math.min(.045, f.vx / 5000));
+    const lift = Math.min(1, Math.abs(f.vy) / stats[f.kind].jump);
+    motion.scaleY += .035 * lift;
+    motion.scaleX -= .018 * lift;
+    motion.rotation -= Math.max(-.045, Math.min(.045, f.vx / 5000));
   }
   if (f.crouching && (f.guarding || f.action === "block")) {
     motion.scaleY = .69;
@@ -908,23 +944,26 @@ function fighterMotion(f) {
   }
 
   const wave = Math.sin(Math.PI * progress);
+  const elapsed = f.actionDuration - f.actionTime;
+  const move = f.moveSpec;
+  const windup = move ? Math.sin(Math.PI * Math.min(1, elapsed / move.startup)) : 0;
+  const extension = move ? smoothstep((elapsed - move.startup * .45) / (move.startup * .55))
+    * (1 - smoothstep((elapsed - move.startup - move.active) / move.recovery)) : 0;
   if (f.action === "punch") {
-    const anticipation = progress < .22 ? -5 * (progress / .22) : 0;
-    motion.dx += f.facing * (anticipation + 15 * wave);
-    motion.rotation -= f.facing * .038 * wave;
-    motion.scaleX += .055 * wave;
-    motion.scaleY -= .025 * wave;
+    motion.dx += f.facing * (-5 * windup + 15 * extension);
+    motion.rotation += f.facing * (.018 * windup - .038 * extension);
+    motion.scaleX += .035 * extension;
+    motion.scaleY -= .02 * extension;
   } else if (f.action === "kick") {
-    motion.dx += f.facing * 10 * wave;
-    motion.dy -= 8 * wave;
-    motion.rotation -= f.facing * .07 * wave;
-    motion.scaleX += .06 * wave;
-    motion.scaleY -= .025 * wave;
+    motion.dx += f.facing * (-3 * windup + 10 * extension);
+    motion.dy -= 6 * extension;
+    motion.rotation += f.facing * (.025 * windup - .06 * extension);
+    motion.scaleX += .035 * extension;
+    motion.scaleY -= .02 * extension;
   } else if (f.action === "special") {
-    const pulse = Math.sin(progress * Math.PI * 4);
-    motion.dy -= 2 + Math.abs(pulse) * 2.4;
-    motion.scaleX += Math.abs(pulse) * .025;
-    motion.scaleY += Math.abs(pulse) * .025;
+    motion.dx += f.facing * (-4 * windup + 7 * extension);
+    motion.rotation += f.facing * (.018 * windup - .022 * extension);
+    motion.scaleY += .015 * extension;
   } else if (f.action === "hit") {
     motion.dx -= f.facing * 11 * wave;
     motion.rotation -= f.facing * .095 * wave;
@@ -940,6 +979,44 @@ function fighterMotion(f) {
   }
 
   return motion;
+}
+
+function lerp(a, b, amount) { return a + (b - a) * amount; }
+
+function smoothstep(value) {
+  const t = Math.max(0, Math.min(1, value));
+  return t * t * (3 - 2 * t);
+}
+
+function updateAnimation(f, dt) {
+  const animation = f.animation;
+  const pose = poseFor(f);
+  if (animation.facing !== f.facing || isVanished(f)) {
+    animation.pose = animation.fromPose = pose;
+    animation.mix = animation.prevMix = 1;
+    animation.facing = f.facing;
+  } else if (pose !== animation.pose) {
+    animation.fromPose = animation.mix >= .5 ? animation.pose : animation.fromPose;
+    animation.pose = pose;
+    animation.mix = animation.prevMix = 0;
+    // Brief transitions retain crisp strikes while easing steps and stance changes.
+    animation.duration = f.action === "hit" ? .018 : f.action === "idle" ? .065 : .035;
+  }
+  animation.mix = Math.min(1, animation.mix + dt / animation.duration);
+  const target = fighterMotion(f);
+  const follow = 1 - Math.exp(-(f.action === "hit" ? 65 : 42) * dt);
+  for (const key of Object.keys(target)) animation.motion[key] = lerp(animation.motion[key], target[key], follow);
+}
+
+function renderedFighter(f) {
+  const animation = f.animation;
+  const motion = {};
+  for (const key of Object.keys(animation.motion)) {
+    motion[key] = lerp(animation.prevMotion[key], animation.motion[key], renderAlpha);
+  }
+  return { kind: f.kind, x: lerp(f.prevX, f.x, renderAlpha), y: lerp(f.prevY, f.y, renderAlpha),
+    facing: f.facing, pose: animation.pose, fromPose: animation.fromPose,
+    mix: smoothstep(lerp(animation.prevMix, animation.mix, renderAlpha)), motion };
 }
 
 function drawMotionLines(f, motion) {
@@ -1006,7 +1083,8 @@ function spriteFrame(frame) {
   const surface = document.createElement("canvas");
   surface.width = surface.height = cell;
   const paint = surface.getContext("2d");
-  paint.drawImage(image, (pose % 3) * cell, Math.floor(pose / 3) * cell, cell, cell, 0, 0, cell, cell);
+  const baseline = movement || frame.kind !== "blotta" ? 260 : (pose === 4 ? 265 : 269);
+  paint.drawImage(image, (pose % 3) * cell, Math.floor(pose / 3) * cell, cell, cell, 0, 260 - baseline, cell, cell);
   // Stage lighting is applied once, preserving every original silhouette and detail.
   paint.globalCompositeOperation = "source-atop";
   const light = paint.createLinearGradient(0, 0, cell * .4, cell);
@@ -1019,11 +1097,34 @@ function spriteFrame(frame) {
   return surface;
 }
 
+function blendedSprite(frame) {
+  const current = spriteFrame(frame);
+  if (!current || frame.mix == null || frame.mix >= 1 || frame.fromPose === frame.pose) return current;
+  const previous = spriteFrame({ kind: frame.kind, pose: frame.fromPose });
+  if (!previous) return current;
+  let surface = poseBlendSurfaces.get(frame.kind);
+  if (!surface) {
+    surface = document.createElement("canvas");
+    surface.width = surface.height = 270;
+    poseBlendSurfaces.set(frame.kind, surface);
+  }
+  const paint = surface.getContext("2d");
+  paint.clearRect(0, 0, 270, 270);
+  paint.globalCompositeOperation = "source-over";
+  paint.globalAlpha = 1 - frame.mix;
+  paint.drawImage(previous, 0, 0);
+  // Premultiplied blending keeps shared opaque pixels solid during a transition.
+  paint.globalCompositeOperation = "lighter";
+  paint.globalAlpha = frame.mix;
+  paint.drawImage(current, 0, 0);
+  paint.globalAlpha = 1;
+  paint.globalCompositeOperation = "source-over";
+  return surface;
+}
+
 function drawSpriteFrame(frame, alpha = 1, ghost = false) {
-  const sprite = spriteFrame(frame);
+  const sprite = blendedSprite(frame);
   if (!sprite) return;
-  const movement = frame.pose >= 6;
-  const pose = frame.pose % 6;
   const cell = 270;
   const size = stats[frame.kind].size * FIGHTER_SCALE;
   const needsFlip = frame.facing !== stats[frame.kind].defaultFace;
@@ -1042,8 +1143,7 @@ function drawSpriteFrame(frame, alpha = 1, ghost = false) {
     ctx.shadowBlur = 1.5 * drawingScale;
     ctx.shadowOffsetY = drawingScale;
   }
-  const baseline = movement || frame.kind !== "blotta" ? 260 : (pose === 4 ? 265 : 269);
-  ctx.drawImage(sprite, -size / 2, -size * baseline / cell, size, size);
+  ctx.drawImage(sprite, -size / 2, -size * 260 / cell, size, size);
   ctx.restore();
 }
 
@@ -1052,25 +1152,24 @@ function drawAfterimage(ghost) {
 }
 
 function drawFighter(f) {
-  const motion = fighterMotion(f);
-  drawMotionLines(f, motion);
+  const frame = renderedFighter(f);
+  const { motion, x, y } = frame;
+  drawMotionLines({ ...f, x, y }, motion);
   const flashing = f.flash > 0 && Math.floor(f.flash * 40) % 2 === 0;
   let opacity = flashing ? .55 : 1;
   if (f.action === "teleport") {
     const elapsed = f.actionDuration - f.actionTime;
     opacity *= elapsed < .16 ? 1 - elapsed / .16 : elapsed < .45 ? 0 : Math.min(1, (elapsed - .45) / .18);
   }
-  const x = f.prevX + (f.x - f.prevX) * renderAlpha;
-  const y = f.prevY + (f.y - f.prevY) * renderAlpha;
-  drawSpriteFrame({ kind: f.kind, pose: poseFor(f), x, y, facing: f.facing, motion }, opacity);
+  drawSpriteFrame(frame, opacity);
   if (f.guarding || f.guardFlash > 0) {
     ctx.save();
     ctx.globalAlpha = .35 + f.guardFlash * 2;
     ctx.strokeStyle = "#8ddfff";
     ctx.lineWidth = f.guardFlash > 0 ? 4 : 2;
     ctx.beginPath();
-    const centerY = f.y - (f.crouching ? 72 : 136) * FIGHTER_SCALE;
-    ctx.arc(f.x + f.facing * 20 * FIGHTER_SCALE, centerY, 35 * FIGHTER_SCALE, f.facing > 0 ? -1.2 : Math.PI - 1.2, f.facing > 0 ? 1.2 : Math.PI + 1.2);
+    const centerY = y - (f.crouching ? 72 : 136) * FIGHTER_SCALE;
+    ctx.arc(x + f.facing * 20 * FIGHTER_SCALE, centerY, 35 * FIGHTER_SCALE, f.facing > 0 ? -1.2 : Math.PI - 1.2, f.facing > 0 ? 1.2 : Math.PI + 1.2);
     ctx.stroke();
     ctx.restore();
   }
@@ -1089,9 +1188,9 @@ function drawFighter(f) {
 
 function drawProjectile(p) {
   ctx.save();
-  ctx.translate(p.x, p.y);
+  ctx.translate(lerp(p.prevX, p.x, renderAlpha), lerp(p.prevY, p.y, renderAlpha));
   ctx.scale(FIGHTER_SCALE, FIGHTER_SCALE);
-  ctx.rotate(p.style === "ki" || p.style === "lightning" ? 0 : p.spin * Math.sign(p.vx));
+  ctx.rotate(p.style === "ki" || p.style === "lightning" ? 0 : lerp(p.prevSpin, p.spin, renderAlpha) * Math.sign(p.vx));
   if (p.style === "lightning") {
     ctx.scale(Math.sign(p.vx) || 1, 1);
     ctx.lineJoin = "miter";
@@ -1197,6 +1296,7 @@ function togglePause() {
   if (state === "playing" || state === "intro") {
     pauseFrom = state;
     state = "paused";
+    stopRoundVoice();
     clearHeld();
     fighters.forEach(f => { f.queuedAction = null; });
     setPauseUI(true);
@@ -1208,6 +1308,11 @@ function togglePause() {
     accumulator = 0;
     setPauseUI(false);
     ui.announcement.classList.remove("show");
+    if (state === "intro") {
+      syncRoundVoice();
+      if (introElapsed >= INTRO.fight) announce("¡PELEA!", (INTRO.end - introElapsed) * 1000);
+      else if (introElapsed >= INTRO.voice) announce("ROUND 1", Math.max(0, INTRO.fight - introElapsed - .15) * 1000);
+    }
   }
 }
 
@@ -1232,6 +1337,39 @@ function ensureAudio() {
   if (!Audio) return;
   if (!audioCtx) audioCtx = new Audio();
   if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+  loadRoundVoice();
+}
+
+function loadRoundVoice() {
+  if (!audioCtx || roundVoiceLoading || roundVoiceBuffer || typeof fetch !== "function") return;
+  roundVoiceLoading = fetch("assets/round-one-fight.mp3")
+    .then(response => { if (!response.ok) throw new Error("Round audio unavailable"); return response.arrayBuffer(); })
+    .then(bytes => audioCtx.decodeAudioData(bytes))
+    .then(buffer => { roundVoiceBuffer = buffer; syncRoundVoice(); })
+    .catch(() => { /* Keep the round playable with the synthesized cue if loading fails. */ });
+}
+
+function stopRoundVoice() {
+  if (roundVoiceSource) {
+    roundVoiceSource.onended = null;
+    try { roundVoiceSource.stop(); } catch (_) { /* It may have just ended. */ }
+    roundVoiceSource.disconnect();
+    roundVoiceSource = null;
+  }
+  roundVoiceStarted = false;
+}
+
+function syncRoundVoice() {
+  if (state !== "intro" || muted || !audioCtx || audioCtx.state !== "running" || !roundVoiceBuffer || roundVoiceStarted) return;
+  const offset = introElapsed - INTRO.voice;
+  if (offset < 0 || offset >= roundVoiceBuffer.duration) return;
+  const source = audioCtx.createBufferSource();
+  source.buffer = roundVoiceBuffer;
+  source.connect(audioCtx.destination);
+  source.onended = () => { source.disconnect(); if (roundVoiceSource === source) roundVoiceSource = null; };
+  source.start(0, offset);
+  roundVoiceSource = source;
+  roundVoiceStarted = true;
 }
 
 function tone(freq, duration, type = "square", volume = .045, slide = 0) {
@@ -1301,9 +1439,10 @@ ui.pauseBtn.addEventListener("click", togglePause);
 
 ui.soundBtn.addEventListener("click", () => {
   muted = !muted;
+  if (muted) stopRoundVoice();
   ui.soundBtn.textContent = muted ? "🔇" : "🔊";
   ui.soundBtn.setAttribute("aria-label", muted ? "Activar sonido" : "Desactivar sonido");
-  if (!muted) sfx("start");
+  if (!muted) { ensureAudio(); syncRoundVoice(); if (state !== "intro") sfx("start"); }
 });
 
 const HOLD_KEYS = {

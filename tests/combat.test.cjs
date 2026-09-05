@@ -151,7 +151,7 @@ test("Space toggles pause without attacking and freezes intro and teleport", () 
   g.tick(1);
   assert.equal(g.run("introElapsed"), intro);
   g.key("Space");
-  g.tick(2.2);
+  g.tick(3.6);
   assert.equal(g.run("state"), "playing");
   g.key("KeyH");
   g.tick(.2);
@@ -383,4 +383,90 @@ test("Marechal's lightning can be blocked or ducked like other high projectiles"
     g.tick(.8);
     assert.equal(g.run("cpu.health"), defense === "guard" ? 99 : 100);
   }
+});
+
+test("stance transitions interpolate, backward steps reverse, and attacks settle into rest", () => {
+  for (const kind of ["sergio", "blotta", "tunki", "marechal"]) {
+    const g = game();
+    g.run('startGame("' + kind + '"); state = "playing";');
+    g.key("KeyS");
+    g.tick(1 / 120);
+    assert.ok(g.run("player.animation.mix > 0 && player.animation.mix < 1"));
+    assert.equal(g.run("player.animation.pose"), 8);
+    g.tick(.1);
+    assert.equal(g.run("player.animation.mix"), 1);
+    g.key("KeyS", "keyup");
+    g.run("player.walkPhase = 2;");
+    g.key("KeyA");
+    g.tick(.1);
+    assert.ok(g.run("player.walkPhase < 2 && player.walkPhase >= 0"));
+    g.key("KeyA", "keyup");
+    g.tick(.3);
+    g.key("KeyK");
+    g.tick(.42);
+    assert.notEqual(g.run("poseFor(player)"), g.run("POSES[player.kind].kick"));
+    g.tick(.3);
+    assert.equal(g.run("player.animation.pose"), 0);
+    assert.equal(g.run("player.animation.mix"), 1);
+    assert.ok(g.run("Object.values(player.animation.motion).every(Number.isFinite)"));
+    const before = g.run("JSON.stringify([player.animation.motion, player.animation.mix, player.walkPhase])");
+    g.key("Space");
+    g.tick(.5);
+    assert.equal(g.run("JSON.stringify([player.animation.motion, player.animation.mix, player.walkPhase])"), before);
+  }
+});
+
+test("render interpolation blends transforms without advancing the simulation", () => {
+  const g = game();
+  g.key("KeyD");
+  g.tick(.15);
+  g.key("KeyW");
+  g.tick(.05);
+  g.run("renderAlpha = .5;");
+  assert.ok(g.run("Math.abs(renderedFighter(player).x - (player.prevX + player.x) / 2) < 1e-9"));
+  assert.ok(g.run("Math.abs(renderedFighter(player).motion.rotation - (player.animation.prevMotion.rotation + player.animation.motion.rotation) / 2) < 1e-9"));
+  const snapshot = g.run("JSON.stringify([player.x, player.y, player.actionTime, player.animation])");
+  g.run("draw(); draw(); draw();");
+  assert.equal(g.run("JSON.stringify([player.x, player.y, player.actionTime, player.animation])"), snapshot);
+});
+
+test("round voice starts once per round, pauses, resumes from its offset and obeys mute", () => {
+  const g = game();
+  g.run(`
+    var voiceLog = [];
+    sfx = () => {};
+    audioCtx = { state: "running", destination: {}, createBufferSource() {
+      return {connect() {}, disconnect() {}, start(when, offset) {voiceLog.push({event: "start", offset});}, stop() {voiceLog.push({event: "stop"});}};
+    }};
+    roundVoiceBuffer = {duration: 4.272};
+    muted = false;
+    startGame("blotta");
+  `);
+  g.tick(1.3);
+  assert.equal(g.run("voiceLog.length"), 0);
+  g.tick(.1);
+  assert.equal(g.run('voiceLog.filter(e => e.event === "start").length'), 1);
+  assert.equal(g.nodes.get("announcement").textContent, "ROUND 1");
+  g.tick(.3);
+  g.key("Space");
+  const offset = g.run("introElapsed - INTRO.voice");
+  g.tick(.4);
+  assert.equal(g.run("roundVoiceSource"), null);
+  g.key("Space");
+  assert.ok(Math.abs(g.run("voiceLog.at(-1).offset") - offset) < 1e-8);
+  g.nodes.get("soundBtn").listeners.click();
+  assert.equal(g.run("roundVoiceSource"), null);
+  g.tick(.2);
+  g.nodes.get("soundBtn").listeners.click();
+  assert.ok(g.run("voiceLog.at(-1).offset") > offset);
+  g.tick(1.45);
+  assert.equal(g.nodes.get("announcement").textContent, "¡PELEA!");
+  g.tick(.7);
+  assert.equal(g.run("state"), "playing");
+  assert.equal(g.run("roundVoiceSource"), null);
+  const starts = g.run('voiceLog.filter(e => e.event === "start").length');
+  g.run('startGame("marechal");');
+  g.tick(1.4);
+  assert.equal(g.run('voiceLog.filter(e => e.event === "start").length'), starts + 1);
+  assert.ok(g.run("voiceLog.at(-1).offset < STEP * 1.1"));
 });
