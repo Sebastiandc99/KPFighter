@@ -35,6 +35,7 @@ function game() {
   const doc = node("document");
   Object.assign(doc, {
     body: node("body"),
+    createElement: tag => node(tag + "-" + nodes.size),
     getElementById: id => node(id),
     querySelector: selector => selector === '[data-tap="special"]' ? taps[3] : node(selector),
     querySelectorAll: selector => ({
@@ -304,4 +305,26 @@ test("standing guard blocks a slam, crouch guard does not, and distance evades i
   g.key("KeyH");
   g.tick(1.3);
   assert.equal(g.run("cpu.health"), 100);
+});
+
+test("phones keep a horizontal cabinet when portrait orientation cannot be locked", async () => {
+  const g = game();
+  g.run('navigator.maxTouchPoints = 5; window.innerWidth = 390; window.innerHeight = 844; syncViewport();');
+  assert.ok(g.nodes.get("body").classList.contains("phone-portrait"));
+  g.run('document.documentElement = {requestFullscreen: async () => {throw Error("unsupported")}}; window.screen = {orientation: {lock: async () => {throw Error("unsupported")}}};');
+  await g.run("requestMobileLandscape()");
+  assert.ok(g.nodes.get("body").classList.contains("phone-portrait"));
+  g.run('window.innerWidth = 844; window.innerHeight = 390; syncViewport();');
+  assert.equal(g.nodes.get("body").classList.contains("phone-portrait"), false);
+  assert.equal(g.run("state"), "playing");
+});
+
+test("high-density rendering keeps game positions and Blotta's speech aligned", () => {
+  const g = game();
+  g.run('startGame("blotta"); canvas.clientWidth = 1200; window.devicePixelRatio = 2; syncViewport(); positionSpeech();');
+  assert.equal(g.run("canvas.width"), 1920);
+  assert.equal(g.run("canvas.height"), 1080);
+  assert.equal(g.run("player.x"), 235);
+  assert.ok(Math.abs(parseFloat(g.nodes.get("speechBubble").style.left) - 235 / 960 * 100) < .001);
+  g.run("draw()");
 });

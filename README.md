@@ -21,7 +21,7 @@ La versión publicada está disponible en:
 - `Espacio`: pausar y reanudar; también funciona durante la introducción
 - `Enter`: avanzar desde la portada y confirmar la selección
 
-En teléfonos y tablets aparecen controles táctiles con soporte para varios dedos y un botón de pausa. Se puede jugar en vertical; horizontal deja más espacio para ver el escenario.
+En teléfonos y tablets aparecen controles táctiles con soporte para varios dedos y un botón de pausa. El juego se presenta en horizontal: al iniciar solicita pantalla completa y orientación horizontal cuando el navegador lo permite. Si el teléfono mantiene la orientación vertical, el tablero gira para aprovechar el lado largo de la pantalla. Al girar el dispositivo, el diseño se adapta automáticamente.
 
 Mantener agacharse y cubrirse permite defender los ataques bajos. La guardia protege de frente: los golpes normales bloqueados no hacen daño y los proyectiles bloqueados quitan 1 de vida. Agacharse también permite esquivar ataques altos.
 
@@ -42,5 +42,7 @@ El rival se elige entre los demás luchadores y es controlado por la máquina. C
 Sitio estático, sin dependencias. El motor avanza en pasos fijos de 1/120 s y dibuja posiciones interpoladas. Los ataques tienen preparación, contacto y recuperación; se pueden almacenar entradas durante 180 ms y encadenar un golpe conectado con patada o especial.
 
 Las hojas de ataques y movimiento incorporan caminar, agacharse, guardia, salto y posturas propias de cada luchador. Sergio y La Tunki tienen una contextura ancha y panza prominente en todos sus sprites. Los nombres, atributos y habilidades están en el catálogo `stats`; la portada no depende del plantel.
+
+La escala de los luchadores se redujo un 10%, con zonas de contacto y efectos ajustados a su tamaño. El dibujado se adapta a la densidad de pantalla, conserva el arte original y añade iluminación suave y sombras de contacto. Las barras de vida ocupan casi todo el ancho superior; el reloj queda encima del encuentro entre ambas.
 
 Pruebas de lógica y entrada: `node --test tests/combat.test.cjs`.

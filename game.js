@@ -3,6 +3,11 @@
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
+const VIEW_WIDTH = 960;
+const VIEW_HEIGHT = 540;
+const FIGHTER_SCALE = .9;
+const spriteFrames = new Map();
+let drawingScale = 1;
 
 const ui = {
   titleScreen: document.getElementById("titleScreen"),
@@ -96,6 +101,36 @@ function loadImage(src) {
   return img;
 }
 
+function mobileInput() {
+  return !!(window.matchMedia?.("(pointer: coarse)").matches || navigator.maxTouchPoints > 0
+    || document.body.classList.contains("touch-device"));
+}
+
+function syncViewport() {
+  const sideways = mobileInput() && window.innerHeight > window.innerWidth;
+  document.body.classList.toggle("phone-portrait", sideways);
+  const density = Math.min(2, Math.max(1, (canvas.clientWidth || VIEW_WIDTH) * (window.devicePixelRatio || 1) / VIEW_WIDTH));
+  const width = Math.round(VIEW_WIDTH * density);
+  const height = Math.round(VIEW_HEIGHT * density);
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  drawingScale = width / VIEW_WIDTH;
+  ctx.imageSmoothingEnabled = false;
+}
+
+async function requestMobileLandscape() {
+  if (!mobileInput()) return;
+  try {
+    if (!document.fullscreenElement && document.documentElement?.requestFullscreen) {
+      await document.documentElement.requestFullscreen();
+    }
+  } catch (_) { /* The rotated layout also works outside fullscreen. */ }
+  try { await window.screen?.orientation?.lock?.("landscape"); } catch (_) { /* CSS handles orientation-lock restrictions. */ }
+  syncViewport();
+}
+
 function clearHeld() {
   keyHolds.clear();
   touchHolds.clear();
@@ -175,6 +210,7 @@ function startGame(choice) {
   hitStop = 0;
   state = "intro";
   showScreen(ui.gameScreen);
+  syncViewport();
   setPauseUI(false);
   ui.resultPanel.hidden = true;
   ui.leftName.textContent = stats[player.kind].name;
@@ -211,7 +247,7 @@ function announce(text, duration = 0) {
 function positionSpeech() {
   const blotta = fighters.find(f => f.kind === "blotta");
   if (!blotta) return;
-  ui.speech.style.left = (blotta.x / canvas.width * 100) + "%";
+  ui.speech.style.left = (blotta.x / VIEW_WIDTH * 100) + "%";
   ui.speech.style.top = "36%";
 }
 
@@ -328,13 +364,13 @@ function updateAI(dt) {
     attack(cpu, "slam");
     return;
   }
-  if (distance > 120) {
+  if (distance > 120 * FIGHTER_SCALE) {
     cpu.moveIntent = toward;
     if (distance > 255 && cpu.power >= 35 && cpu.specialCooldown === 0 && Math.random() < .22) attack(cpu, "special");
     else if (distance < 215 && cpu.grounded && Math.random() < .10) jump(cpu);
     return;
   }
-  cpu.moveIntent = distance < 62 && Math.random() < .2 ? -toward : 0;
+  cpu.moveIntent = distance < 62 * FIGHTER_SCALE && Math.random() < .2 ? -toward : 0;
   const roll = Math.random();
   if (roll < .37) attack(cpu, "punch");
   else if (roll < .73) attack(cpu, "kick");
@@ -455,8 +491,8 @@ function updateFighter(f, dt) {
 
 function hurtBox(f) {
   const low = f.crouching || f.lowAttack;
-  const height = low ? 124 : stats[f.kind].height;
-  const width = stats[f.kind].width;
+  const height = (low ? 124 : stats[f.kind].height) * FIGHTER_SCALE;
+  const width = stats[f.kind].width * FIGHTER_SCALE;
   return { left: f.x - width, right: f.x + width, top: f.y - height, bottom: f.y - 4 };
 }
 
@@ -476,10 +512,10 @@ function attackContact(f, target) {
   const spec = f.moveSpec;
   const elapsed = f.actionDuration - f.actionTime;
   if (elapsed < spec.startup || elapsed > spec.startup + spec.active) return null;
-  const front = f.x + f.facing * spec.reach;
+  const front = f.x + f.facing * spec.reach * FIGHTER_SCALE;
   const low = f.lowAttack;
-  const centerY = f.y - (low ? (f.action === "kick" ? 34 : 67) : (f.action === "punch" ? (f.kind === "sergio" ? 88 : 145) : 120));
-  const thickness = f.action === "punch" ? 14 : 20;
+  const centerY = f.y - (low ? (f.action === "kick" ? 34 : 67) : (f.action === "punch" ? (f.kind === "sergio" ? 88 : 145) : 120)) * FIGHTER_SCALE;
+  const thickness = (f.action === "punch" ? 14 : 20) * FIGHTER_SCALE;
   const box = { left: Math.min(f.x, front), right: Math.max(f.x, front), top: centerY - thickness, bottom: centerY + thickness };
   if (!overlaps(box, hurtBox(target))) return null;
   return {
@@ -492,8 +528,8 @@ function attackContact(f, target) {
 function slamContact(f, target) {
   if (f.attackLanded || !f.slamDiving || isVanished(target) || target.invuln > 0) return null;
   if (f.slamLanded && f.actionTime < .24) return null;
-  const radius = f.slamLanded ? 100 : 49;
-  const box = { left: f.x - radius, right: f.x + radius, top: f.y - 65, bottom: f.y + 5 };
+  const radius = (f.slamLanded ? 100 : 49) * FIGHTER_SCALE;
+  const box = { left: f.x - radius, right: f.x + radius, top: f.y - 65 * FIGHTER_SCALE, bottom: f.y + 5 };
   if (!overlaps(box, hurtBox(target))) return null;
   const direction = Math.sign(target.x - f.x) || f.facing;
   return { attacker: f, target, damage: MOVES.slam.damage, knock: MOVES.slam.knock, lift: -180,
@@ -504,7 +540,7 @@ function separateFighters() {
   if (fighters.some(isVanished)) return;
   if (!overlaps(hurtBox(player), hurtBox(cpu))) return;
   const dx = cpu.x - player.x;
-  const spacing = stats[player.kind].width + stats[cpu.kind].width + 2;
+  const spacing = (stats[player.kind].width + stats[cpu.kind].width) * FIGHTER_SCALE + 2;
   const overlap = spacing - Math.abs(dx);
   if (overlap <= 0) return;
   const sign = Math.sign(dx) || 1;
@@ -594,9 +630,9 @@ function spawnProjectile(owner, style) {
     style === "flowers" ? { speed: 405, damage: 14, radius: 20 } :
     style === "bottle" ? { speed: 425, damage: 12, radius: 16 } : { speed: 395, damage: 10, radius: 19 };
   projectiles.push({
-    owner, style, x: owner.x + owner.facing * 58, y: owner.y - 143,
+    owner, style, x: owner.x + owner.facing * 58 * FIGHTER_SCALE, y: owner.y - 143 * FIGHTER_SCALE,
     vx: owner.facing * config.speed, vy: style === "ki" ? 0 : -42,
-    damage: config.damage, radius: config.radius, life: 2.5, spin: 0, trailTime: 0
+    damage: config.damage, radius: config.radius * FIGHTER_SCALE, life: 2.5, spin: 0, trailTime: 0
   });
 }
 
@@ -639,7 +675,7 @@ function hit(target, damage, knockX, knockY, attacker, contact = {}) {
     target.vx = knockX * .24;
     target.invuln = .08;
     target.guardFlash = .20;
-    burst(target.x + target.facing * 32, target.y - (target.crouching ? 65 : 134), "#8cecff", 6);
+    burst(target.x + target.facing * 32 * FIGHTER_SCALE, target.y - (target.crouching ? 65 : 134) * FIGHTER_SCALE, "#8cecff", 6);
     hitStop = .025;
     sfx("block");
   } else {
@@ -756,6 +792,7 @@ function updateParticles(dt) {
 }
 
 function draw() {
+  ctx.setTransform(drawingScale, 0, 0, drawingScale, 0, 0);
   const shakeX = screenShake ? (Math.random() - .5) * screenShake : 0;
   const shakeY = screenShake ? (Math.random() - .5) * screenShake * .55 : 0;
   const parallaxX = Math.sin(stageTime * .55) * 2;
@@ -814,11 +851,17 @@ function drawShadow(f) {
   if (isVanished(f)) return;
   const lift = Math.max(0, FLOOR - f.y);
   ctx.save();
-  ctx.globalAlpha = .32 * Math.max(.3, 1 - lift / 430);
-  ctx.fillStyle = "#000";
-  ctx.beginPath();
-  ctx.ellipse(f.x, FLOOR + 2, Math.max(15, 45 - lift * .04), Math.max(3, 8 - lift * .012), 0, 0, Math.PI * 2);
-  ctx.fill();
+  const radius = Math.max(18, (stats[f.kind].width + 15) * FIGHTER_SCALE - lift * .035);
+  const x = f.prevX + (f.x - f.prevX) * renderAlpha;
+  ctx.translate(x, FLOOR + 3);
+  ctx.scale(1, .2);
+  const shadow = ctx.createRadialGradient(0, 0, 2, 0, 0, radius);
+  shadow.addColorStop(0, "rgba(0,0,0,.65)");
+  shadow.addColorStop(.5, "rgba(0,0,0,.28)");
+  shadow.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.globalAlpha = Math.max(.25, 1 - lift / 360);
+  ctx.fillStyle = shadow;
+  ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
   ctx.restore();
 }
 
@@ -901,7 +944,7 @@ function drawMotionLines(f, motion) {
     ctx.strokeStyle = f.kind === "sergio" ? "#ffe165" : f.kind === "tunki" ? "#ff88ce" : "#8fe5ff";
     ctx.lineCap = "square";
     for (let i = 0; i < 4; i++) {
-      const y = f.y - 55 - i * 18 + motion.dy;
+      const y = f.y - (55 + i * 18) * FIGHTER_SCALE + motion.dy;
       const front = f.x + motion.dx - f.facing * (34 + i * 5);
       ctx.lineWidth = 5 - i * .7;
       ctx.beginPath();
@@ -919,21 +962,43 @@ function drawMotionLines(f, motion) {
     ctx.lineWidth = 3;
     const radius = 48 + Math.sin(progress * Math.PI * 5) * 8;
     ctx.beginPath();
-    ctx.ellipse(f.x, f.y - 82, radius, radius * .68, 0, 0, Math.PI * 2);
+    ctx.ellipse(f.x, f.y - 82 * FIGHTER_SCALE, radius * FIGHTER_SCALE, radius * .68 * FIGHTER_SCALE, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
 }
 
-function drawSpriteFrame(frame, alpha = 1, ghost = false) {
+function spriteFrame(frame) {
+  const key = frame.kind + ":" + frame.pose;
+  if (spriteFrames.has(key)) return spriteFrames.get(key);
   const movement = frame.pose >= 6;
   const image = assets[frame.kind + (movement ? "Motion" : "")];
-  if (!image.complete || !image.naturalWidth) return;
+  if (!image.complete || !image.naturalWidth) return null;
   const pose = frame.pose % 6;
   const cell = 270;
-  const sx = (pose % 3) * cell;
-  const sy = Math.floor(pose / 3) * cell;
-  const size = stats[frame.kind].size;
+  const surface = document.createElement("canvas");
+  surface.width = surface.height = cell;
+  const paint = surface.getContext("2d");
+  paint.drawImage(image, (pose % 3) * cell, Math.floor(pose / 3) * cell, cell, cell, 0, 0, cell, cell);
+  // Stage lighting is applied once, preserving every original silhouette and detail.
+  paint.globalCompositeOperation = "source-atop";
+  const light = paint.createLinearGradient(0, 0, cell * .4, cell);
+  light.addColorStop(0, "rgba(255,244,218,.12)");
+  light.addColorStop(.45, "rgba(255,235,210,.025)");
+  light.addColorStop(1, "rgba(10,21,40,.11)");
+  paint.fillStyle = light;
+  paint.fillRect(0, 0, cell, cell);
+  spriteFrames.set(key, surface);
+  return surface;
+}
+
+function drawSpriteFrame(frame, alpha = 1, ghost = false) {
+  const sprite = spriteFrame(frame);
+  if (!sprite) return;
+  const movement = frame.pose >= 6;
+  const pose = frame.pose % 6;
+  const cell = 270;
+  const size = stats[frame.kind].size * FIGHTER_SCALE;
   const needsFlip = frame.facing !== stats[frame.kind].defaultFace;
   const motion = frame.motion;
 
@@ -942,9 +1007,16 @@ function drawSpriteFrame(frame, alpha = 1, ghost = false) {
   ctx.rotate(motion.rotation);
   ctx.scale((needsFlip ? -1 : 1) * motion.scaleX, motion.scaleY);
   ctx.globalAlpha = alpha;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   if (ghost) ctx.globalCompositeOperation = "screen";
+  else {
+    ctx.shadowColor = "rgba(4,10,22,.65)";
+    ctx.shadowBlur = 1.5 * drawingScale;
+    ctx.shadowOffsetY = drawingScale;
+  }
   const baseline = movement || frame.kind !== "blotta" ? 260 : (pose === 4 ? 265 : 269);
-  ctx.drawImage(image, sx, sy, cell, cell, -size / 2, -size * baseline / cell, size, size);
+  ctx.drawImage(sprite, -size / 2, -size * baseline / cell, size, size);
   ctx.restore();
 }
 
@@ -970,8 +1042,8 @@ function drawFighter(f) {
     ctx.strokeStyle = "#8ddfff";
     ctx.lineWidth = f.guardFlash > 0 ? 4 : 2;
     ctx.beginPath();
-    const centerY = f.y - (f.crouching ? 72 : 136);
-    ctx.arc(f.x + f.facing * 20, centerY, 35, f.facing > 0 ? -1.2 : Math.PI - 1.2, f.facing > 0 ? 1.2 : Math.PI + 1.2);
+    const centerY = f.y - (f.crouching ? 72 : 136) * FIGHTER_SCALE;
+    ctx.arc(f.x + f.facing * 20 * FIGHTER_SCALE, centerY, 35 * FIGHTER_SCALE, f.facing > 0 ? -1.2 : Math.PI - 1.2, f.facing > 0 ? 1.2 : Math.PI + 1.2);
     ctx.stroke();
     ctx.restore();
   }
@@ -991,6 +1063,7 @@ function drawFighter(f) {
 function drawProjectile(p) {
   ctx.save();
   ctx.translate(p.x, p.y);
+  ctx.scale(FIGHTER_SCALE, FIGHTER_SCALE);
   ctx.rotate(p.style === "ki" ? 0 : p.spin * Math.sign(p.vx));
   if (p.style === "ki") {
     const glow = ctx.createRadialGradient(0, 0, 3, 0, 0, 31);
@@ -1144,7 +1217,10 @@ function sfx(name) {
   (sounds[name] || (() => {}))();
 }
 
-ui.startBtn.addEventListener("click", openSelection);
+ui.startBtn.addEventListener("click", () => {
+  requestMobileLandscape();
+  openSelection();
+});
 
 document.querySelectorAll("[data-pick]").forEach(btn => {
   btn.addEventListener("click", () => chooseFighter(btn.dataset.pick));
@@ -1156,6 +1232,7 @@ document.querySelectorAll("[data-pick]").forEach(btn => {
 });
 
 ui.confirmBtn.addEventListener("click", () => {
+  requestMobileLandscape();
   sfx("confirm");
   startGame(playerChoice);
 });
@@ -1269,11 +1346,18 @@ document.querySelectorAll("[data-tap]").forEach(btn => {
 });
 
 document.addEventListener("pointerdown", event => {
-  if (event.pointerType === "touch") document.body.classList.add("touch-device");
+  if (event.pointerType === "touch") {
+    document.body.classList.add("touch-device");
+    syncViewport();
+  }
 }, { passive: true });
 
 document.addEventListener("contextmenu", event => {
   if (state !== "title" && state !== "select") event.preventDefault();
 });
 
+window.addEventListener("resize", syncViewport);
+window.addEventListener("orientationchange", syncViewport);
+document.addEventListener("fullscreenchange", syncViewport);
+syncViewport();
 requestAnimationFrame(loop);
