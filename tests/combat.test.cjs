@@ -1084,3 +1084,22 @@ test('air kick takes precedence over back, low kicks stay low, and touch support
  g.key('Space');g.tick(1.5);g.holds[0].listeners.pointerdown(e);g.taps[2].listeners.pointerdown({...e,pointerId:14});assert.equal(g.run('player.kickStyle'),'volley');
  g.tick(.8);g.holds[2].listeners.pointerdown({...e,pointerId:15});g.taps[2].listeners.pointerdown({...e,pointerId:16});assert.equal(g.run('player.lowAttack'),true);assert.equal(g.run('player.kickStyle'),null);
 });
+
+test('KO voice starts with the winning KO caption, skips silence and plays only once',()=>{
+ const g=game();enableCombatAudio(g);g.run('KO_AUDIO.buffer={name:"ko",duration:1.56};finishRound(player,"K.O.")');
+ assert.equal(g.nodes.get('announcement').textContent,'K.O.');assert.equal(g.run('combatLog.filter(e=>e.name==="ko"&&e.event==="start").length'),1);
+ assert.equal(g.run('combatLog.find(e=>e.name==="ko"&&e.event==="start").offset'),.179);
+ g.run('finishRound(player,"K.O.")');g.tick(1.3);assert.equal(g.run('koVoice'),null);assert.equal(g.nodes.get('announcement').classList.contains('show'),false);
+ assert.equal(g.run('combatLog.filter(e=>e.name==="ko"&&e.event==="start").length'),1);
+});
+test('KO pauses with its caption, resumes from its offset, obeys mute and clears on exit',()=>{
+ const g=game();enableCombatAudio(g);g.run('KO_AUDIO.buffer={name:"ko",duration:1.56};finishRound(cpu,"K.O.")');g.tick(.3);g.key('Space');
+ const offset=g.run('koVoice.elapsed');g.tick(1);assert.equal(g.run('koVoice.elapsed'),offset);assert.equal(g.run('koVoice.source'),null);
+ g.key('Space');assert.equal(g.nodes.get('announcement').classList.contains('show'),true);assert.ok(g.run('combatLog.filter(e=>e.name==="ko"&&e.event==="start").at(-1).offset')>.47);
+ g.nodes.get('soundBtn').listeners.click();assert.equal(g.run('koVoice.source'),null);g.tick(.2);g.nodes.get('soundBtn').listeners.click();assert.ok(g.run('combatLog.filter(e=>e.name==="ko"&&e.event==="start").at(-1).offset')>.67);
+ g.run('mainMenu()');assert.equal(g.run('koVoice'),null);
+});
+test('KO is absent on time or draws and final-round knockout still plays it',()=>{
+ for(const reason of ['TIEMPO','K.O.']){const g=game();enableCombatAudio(g);g.run('KO_AUDIO.buffer={name:"ko",duration:1.56}');g.run(reason==='TIEMPO'?'finishRound(player,"TIEMPO")':'finishRound(null,"K.O.")');assert.equal(g.run('koVoice'),null);}
+ const g=game();enableCombatAudio(g);g.run('KO_AUDIO.buffer={name:"ko",duration:1.56};match.playerWins=1;finishRound(player,"K.O.")');assert.equal(g.run('state'),'finished');assert.ok(g.run('koVoice.source'));g.tick(1.3);assert.equal(g.run('koVoice'),null);
+});

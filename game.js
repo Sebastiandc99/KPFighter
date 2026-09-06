@@ -104,6 +104,9 @@ const MOVES = {
   slam: { startup: .12, active: 1.55, recovery: .33, damage: 18, knock: 290 }
 };
 
+const KO_AUDIO = {src:"assets/ko.mp3", start:.179, duration:1.24, buffer:null, loading:null};
+let koVoice = null;
+
 const COMBAT_AUDIO = {
   hockey: {src: "assets/hockey-hit.wav", volume: 1.35, start: 0, end: .8},
   boomerang: {src: "assets/boomerang.wav", volume: 1.1, start: 0, end: 1},
@@ -500,6 +503,7 @@ function update(dt) {
   }
   if (state === "finished" || state === "roundOver") {
     resultElapsed += dt;
+    if(koVoice){koVoice.elapsed+=dt;if(koVoice.elapsed>=KO_AUDIO.duration)stopKOAudio();else syncKOAudio();}
     updateParticles(dt);
     updateAfterimages(dt);
     updateEffects(dt);
@@ -1084,7 +1088,8 @@ function finishRound(winner, reason) {
     else if(campaign.completed)ui.resultTitle.textContent=fighterLabel(player)+" · CAMPEÓN";
   }
   updateHud();
-  announce(reason, 750);
+  announce(reason, winner && reason==="K.O." ? KO_AUDIO.duration*1000 : 750);
+  if(winner && reason==="K.O."){koVoice={elapsed:0,source:null,gain:null};syncKOAudio();}
   sfx(match.complete ? winner === player ? "win" : "lose" : "confirm");
 }
 
@@ -2095,12 +2100,14 @@ function togglePause() {
   } else if (state === "paused") {
     state = pauseFrom;
     syncCombatSounds();
+    syncKOAudio();
     syncMusic();
     clearHeld();
     lastTime = performance.now();
     accumulator = 0;
     setPauseUI(false);
     ui.announcement.classList.remove("show");
+    if(koVoice && announcementTime>0)announce("K.O.",announcementTime*1000);
     if (state === "intro") {
       const timing = ROUND_AUDIO[match.round].timing;
       syncRoundVoice();
@@ -2131,10 +2138,32 @@ function ensureAudio() {
   if (!Audio) return;
   if (!audioCtx) audioCtx = new Audio();
   if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+  loadKOAudio();
   [1, 2, 3].forEach(loadRoundVoice);
   Object.keys(COMBAT_AUDIO).forEach(loadCombatAudio);
   loadMusic(EXTRA_AUDIO.selection);
   if (musicTrack) loadMusic(musicTrack);
+}
+
+function loadKOAudio() {
+  if(!audioCtx || KO_AUDIO.buffer || KO_AUDIO.loading || typeof fetch!=="function")return;
+  KO_AUDIO.loading=fetch(KO_AUDIO.src).then(r=>{if(!r.ok)throw Error("KO audio unavailable");return r.arrayBuffer();})
+    .then(b=>audioCtx.decodeAudioData(b)).then(b=>{KO_AUDIO.buffer=b;syncKOAudio();}).catch(()=>{});
+}
+function disconnectKOAudio() {
+  if(!koVoice)return;
+  if(koVoice.source){koVoice.source.onended=null;try{koVoice.source.stop();}catch(_){}koVoice.source.disconnect();koVoice.source=null;}
+  if(koVoice.gain){koVoice.gain.disconnect();koVoice.gain=null;}
+}
+function stopKOAudio(){disconnectKOAudio();koVoice=null;}
+function syncKOAudio() {
+  if(!koVoice || koVoice.source || muted || !["roundOver","finished"].includes(state) || !KO_AUDIO.buffer || !audioCtx || audioCtx.state!=="running")return;
+  const offset=KO_AUDIO.start+koVoice.elapsed;
+  const remaining=Math.min(KO_AUDIO.duration-koVoice.elapsed,KO_AUDIO.buffer.duration-offset);
+  if(remaining<=0){stopKOAudio();return;}
+  const source=audioCtx.createBufferSource(),gain=audioCtx.createGain();source.buffer=KO_AUDIO.buffer;
+  gain.gain.value=1;source.connect(gain).connect(audioCtx.destination);koVoice.source=source;koVoice.gain=gain;
+  source.start(0,offset,remaining);
 }
 
 function loadCombatAudio(name) {
@@ -2188,6 +2217,7 @@ function stopFighterSound(f) {
 }
 
 function stopAllCombatSounds() {
+  stopKOAudio();
   stopSynthSounds();
   projectiles = projectiles.filter(p => p.style !== "boomerang");
   for (const voice of [...combatSounds, ...soundTails]) stopCombatSound(voice, true);
@@ -2195,6 +2225,7 @@ function stopAllCombatSounds() {
 }
 
 function suspendCombatSounds(includeTails = true) {
+  if(includeTails)disconnectKOAudio();
   if (includeTails) stopSynthSounds();
   if (includeTails) for (const voice of soundTails) stopCombatSound(voice, true);
   for (const voice of combatSounds) disconnectCombatVoice(voice);
@@ -2378,7 +2409,7 @@ ui.soundBtn.addEventListener("click", () => {
   if (muted) { stopRoundVoice(); suspendCombatSounds(); pauseMusic(); }
   ui.soundBtn.textContent = muted ? "🔇" : "🔊";
   ui.soundBtn.setAttribute("aria-label", muted ? "Activar sonido" : "Desactivar sonido");
-  if (!muted) { ensureAudio(); syncRoundVoice(); syncCombatSounds(); syncMusic(); }
+  if (!muted) { ensureAudio(); syncRoundVoice(); syncCombatSounds(); syncKOAudio(); syncMusic(); }
 });
 
 const HOLD_KEYS = {

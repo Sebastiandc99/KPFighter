@@ -139,3 +139,5 @@ Saltar + patada usa una pose con pierna diagonal hacia abajo y una zona de golpe
 Se generaron dos atlases de poses con la herramienta integrada: assets/kicks-classic-a-v1.png y assets/kicks-classic-b-v1.png. Brief: patada aérea con pierna extendida diagonal hacia abajo y volea con torso girado, conservando las seis identidades y prendas; Flor siempre con palo y Facu sin bigote en la base, compuesto por el motor según el estado de su boomerang. El motor recorta las siluetas completas y conserva los originales.
 
 La dificultad inicial sube nuevamente: intervalo de decisión 0,30–0,50 s, mayor actividad y defensa. Los niveles siguientes mantienen una progresión creciente hasta experto.
+
+Audio KO: grabación del usuario convertida a MP3 para compatibilidad. Comienza con el cartel K.O. en cada round ganado por nocaut, omitiendo 179 ms de silencio inicial; cartel y voz duran 1,24 s. Sin repetición en tiempo agotado o empate. Pausa/silencio conservan la posición; salir o comenzar round limpia la voz.
