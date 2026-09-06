@@ -353,10 +353,10 @@ function openStageSelection() {
 }
 
 const DIFFICULTIES = [
- {name:"FÁCIL", reaction:.62, guard:.12, attack:.38, speed:.62, power:.08, tactics:.10},
- {name:"NORMAL", reaction:.43, guard:.28, attack:.55, speed:.70, power:.15, tactics:.25},
- {name:"MEDIA", reaction:.29, guard:.45, attack:.72, speed:.78, power:.23, tactics:.42},
- {name:"DIFÍCIL", reaction:.17, guard:.64, attack:.88, speed:.87, power:.32, tactics:.60},
+ {name:"NORMAL", reaction:.38, guard:.30, attack:.62, speed:.74, power:.17, tactics:.28},
+ {name:"MEDIA", reaction:.29, guard:.42, attack:.73, speed:.79, power:.23, tactics:.40},
+ {name:"AVANZADA", reaction:.22, guard:.54, attack:.81, speed:.84, power:.29, tactics:.52},
+ {name:"DIFÍCIL", reaction:.16, guard:.66, attack:.90, speed:.89, power:.35, tactics:.64},
  {name:"EXPERTO", reaction:.10, guard:.78, attack:.98, speed:.95, power:.42, tactics:.76}
 ];
 function difficulty() { return DIFFICULTIES[campaign && gameMode==="solo" ? Math.min(campaign.index,4) : 3]; }
