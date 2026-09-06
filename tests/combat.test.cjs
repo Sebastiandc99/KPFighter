@@ -700,10 +700,10 @@ test("all four fighters uppercut with down+punch on keyboard and touch, launch o
       assert.equal(g.run("cpu.health"), 100);
       assert.equal(g.run("poseFor(player)"), 12);
       g.tick(.08);
-      assert.equal(g.run("cpu.health"), 88);
+      assert.equal(g.run("cpu.health"), 91);
       assert.ok(g.run("cpu.vy < 0 && !cpu.grounded"));
       g.tick(.8);
-      assert.equal(g.run("cpu.health"), 88);
+      assert.equal(g.run("cpu.health"), 91);
       assert.equal(g.run("player.action"), "idle");
       assert.equal(g.run("poseFor(player)"), 8);
     }
@@ -931,4 +931,25 @@ test('ranking uses arcade positions and score-before-name without truncating nam
   assert.equal(cells[1].children[0].textContent,'50000');
   assert.equal(cells[2].children[0].textContent,'Sebastián completo');
   assert.ok(cells[2].classList.contains('long-name'));
+});
+
+test('CPU uses a low kick against standing guard and a longer kick outside punch reach', () => {
+  const g=game();
+  g.run('Math.random=()=>.5; player.x=300; cpu.x=375; player.guarding=true; aiClock=0; updateAI(STEP)');
+  assert.equal(g.run('cpu.action'),'kick'); assert.equal(g.run('cpu.lowAttack'),true);
+  const h=game();
+  h.run('Math.random=()=>.2; player.x=300; cpu.x=405; aiClock=0; updateAI(STEP)');
+  assert.equal(h.run('cpu.action'),'kick');
+  assert.equal(h.run('cpu.health'),100); assert.equal(h.run('MOVES.kick.damage'),8);
+});
+
+
+test('all damaging powers exceed every normal melee attack', () => {
+  const g=game();
+  const maxNormal=g.run('Math.max(MOVES.punch.damage,MOVES.kick.damage,MOVES.lowKick.damage,MOVES.uppercut.damage)');
+  for(const style of ['ki','lightning','flowers','bottle','meat']) {
+    g.run('spawnProjectile(player,'+JSON.stringify(style)+')');
+    assert.ok(g.run('projectiles.at(-1).damage')>maxNormal,style);
+  }
+  assert.ok(g.run('MOVES.slam.damage')>maxNormal);
 });

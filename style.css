@@ -984,3 +984,15 @@ button, .name-row strong, .choice-tile strong, .stage-card strong { font-weight:
   .ranking-actions { left: 6%; right: 6%; bottom: 1%; }
   .ranking-screen #rankingStatus { bottom: 12%; }
 }
+
+/* Larger life bars, with score and controls kept below the expanded HUD. */
+.fight-screen .health-shell,
+.phone-portrait .fight-screen .health-shell {
+  height: clamp(28px, 6cqw, 64px);
+  border-width: 2px;
+}
+.fight-screen .round-label { top: 28%; }
+.fight-screen .corner-btn { top: 32%; }
+.two-touch .fight-screen .health-shell { height: clamp(24px, 8.5cqh, 44px); }
+.two-touch .fight-screen .round-label { top: 27%; }
+.two-touch .fight-screen .corner-btn { top: 2%; }

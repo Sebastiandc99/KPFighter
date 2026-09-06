@@ -95,3 +95,10 @@ El ranking usa un escenario de cubierta nocturna inspirado en la referencia, sin
 La fuente KP Arcade Score, con remates y contornos de píxeles, se deriva de DejaVu Serif Bold; su licencia se incluye en assets/fonts. El script scripts/build-ranking-font.py permite regenerarla con Pillow y FontTools.
 
 La grabación nueva de selección se sirve como assets/seleccion-v2.mp3 y se repite durante ambas selecciones. La música de pelea bajó de 0,48 a 0,36; la selección de 0,55 a 0,42. Rayos, carne y flores subieron de 1 a 1,35; también se reforzaron los efectos sintetizados de energía y humo. Los golpes mantienen su volumen reducido y la sincronización permanece igual.
+
+
+## Barras de vida y dificultad
+
+Las barras de vida son aproximadamente el doble de gruesas, con espacio para el puntaje y los controles. La CPU decide cada 110–250 ms, detecta proyectiles desde un poco más lejos, se defiende con mayor frecuencia y elige mejor el alcance de los ataques. Puede usar patadas bajas contra una guardia de pie; sigue teniendo probabilidades de equivocarse. Solo cambia el rival automático del modo individual.
+
+Daño normal: puño/panzazo 6, patada baja 7, patada 8 y gancho 9. Los poderes dañinos quitan más vida: carne 10, botella 12, energía/rayo 13, flores 14 y aplastamiento 18. Este balance se aplica a ambos jugadores y a la CPU.

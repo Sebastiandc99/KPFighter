@@ -84,10 +84,10 @@ const ROUND_AUDIO = {
   3: { src: "assets/final-round.mp3", title: "FINAL ROUND", timing: { voice: .35, title: .520, fight: 2.304, end: 3.00 }, buffer: null, loading: null }
 };
 const MOVES = {
-  punch: { startup: .085, active: .095, recovery: .18, reach: 77, damage: 8, knock: 160 },
-  kick: { startup: .12, active: .16, recovery: .23, reach: 106, damage: 11, knock: 235 },
-  uppercut: { startup: .105, active: .17, recovery: .26, reach: 76, damage: 12, knock: 145, lift: -420 },
-  lowKick: { startup: .13, active: .14, recovery: .22, reach: 102, damage: 9, knock: 210 },
+  punch: { startup: .085, active: .095, recovery: .18, reach: 77, damage: 6, knock: 160 },
+  kick: { startup: .12, active: .16, recovery: .23, reach: 106, damage: 8, knock: 235 },
+  uppercut: { startup: .105, active: .17, recovery: .26, reach: 76, damage: 9, knock: 145, lift: -420 },
+  lowKick: { startup: .13, active: .14, recovery: .22, reach: 102, damage: 7, knock: 210 },
   special: { startup: .19, active: .04, recovery: .29 },
   teleport: { startup: .16, active: .28, recovery: .23 },
   slam: { startup: .12, active: 1.55, recovery: .33, damage: 18, knock: 290 }
@@ -554,40 +554,48 @@ function updateAI(dt) {
   if (isLocked(cpu)) return;
   aiClock -= dt;
   if (aiClock > 0) return;
-  aiClock = .14 + Math.random() * .18;
+  aiClock = .11 + Math.random() * .14;
   if (cpu.guarding || cpu.crouching) { cpu.moveIntent = 0; return; }
-  const incoming = projectiles.some(p => p.owner === player && Math.abs(p.x - cpu.x) < 190 && (cpu.x - p.x) * p.vx > 0);
+  const incoming = projectiles.some(p => p.owner === player && Math.abs(p.x - cpu.x) < 220 && (cpu.x - p.x) * p.vx > 0);
   const threatened = distance < 140 && ["punch", "uppercut", "kick"].includes(player.action);
-  if (!player.grounded && cpu.grounded && distance < 105 && player.y > FLOOR - 185 && Math.random() < .35) {
+  if (!player.grounded && cpu.grounded && distance < 105 && player.y > FLOOR - 185 && Math.random() < .43) {
     cpu.crouchTime = .45;
     setStance(cpu, true, false);
     attack(cpu, "punch");
     return;
   }
-  if ((incoming || threatened) && cpu.grounded && Math.random() < .55) {
+  if ((incoming || threatened) && cpu.grounded && Math.random() < .65) {
     cpu.guardTime = .26 + Math.random() * .22;
     cpu.crouchTime = player.lowAttack ? cpu.guardTime : 0;
     setStance(cpu, cpu.crouchTime > 0, true);
     cpu.moveIntent = 0;
     return;
   }
-  if (cpu.kind === "blotta" && cpu.power >= 30 && cpu.specialCooldown === 0 && distance < 260 && Math.random() < .075) {
+  if (cpu.kind === "blotta" && cpu.power >= 30 && cpu.specialCooldown === 0 && distance < 260 && Math.random() < .09) {
     attack(cpu, "teleport");
     return;
   }
-  if (cpu.kind === "tunki" && cpu.power >= 30 && cpu.specialCooldown === 0 && distance < 220 && cpu.grounded && Math.random() < .16) {
+  if (cpu.kind === "tunki" && cpu.power >= 30 && cpu.specialCooldown === 0 && distance < 220 && cpu.grounded && Math.random() < .19) {
     attack(cpu, "slam");
     return;
   }
   if (distance > 120 * FIGHTER_SCALE) {
     cpu.moveIntent = toward;
-    if (distance > 255 && cpu.power >= 35 && cpu.specialCooldown === 0 && Math.random() < .22) attack(cpu, "special");
+    if (distance > 235 && cpu.power >= 35 && cpu.specialCooldown === 0 && Math.random() < .28) attack(cpu, "special");
     else if (distance < 215 && cpu.grounded && Math.random() < .10) jump(cpu);
     return;
   }
   cpu.moveIntent = distance < 62 * FIGHTER_SCALE && Math.random() < .2 ? -toward : 0;
+  // Choose a low attack against a standing guard, but still allow reaction mistakes.
+  if (player.guarding && !player.crouching && cpu.grounded && Math.random() < .6) {
+    cpu.crouchTime = .42;
+    setStance(cpu, true, false);
+    attack(cpu, "kick");
+    return;
+  }
   const roll = Math.random();
-  if (roll < .37) attack(cpu, "punch");
+  const punchReach = (MOVES.punch.reach + stats[player.kind].width) * FIGHTER_SCALE - 4;
+  if (roll < .37) attack(cpu, distance <= punchReach ? "punch" : "kick");
   else if (roll < .73) attack(cpu, "kick");
   else if (roll < .86 && cpu.grounded) {
     cpu.crouchTime = .42;
