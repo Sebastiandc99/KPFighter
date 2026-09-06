@@ -102,3 +102,14 @@ La grabación nueva de selección se sirve como assets/seleccion-v2.mp3 y se rep
 Las barras de vida son aproximadamente el doble de gruesas, con espacio para el puntaje y los controles. La CPU decide cada 110–250 ms, detecta proyectiles desde un poco más lejos, se defiende con mayor frecuencia y elige mejor el alcance de los ataques. Puede usar patadas bajas contra una guardia de pie; sigue teniendo probabilidades de equivocarse. Solo cambia el rival automático del modo individual.
 
 Daño normal: puño/panzazo 3, patada baja 4, patada 4 y gancho 5. Los poderes dañinos quitan más vida: carne 10, botella 12, energía/rayo 13, flores 14 y aplastamiento 18. Este balance se aplica a ambos jugadores y a la CPU.
+
+
+## Facu · Bigote boomerang
+
+Facu es el quinto luchador y está disponible para ambos jugadores y la CPU. Conserva pelo oscuro, piel clara, contextura delgada, buzo negro, pantalón oscuro y zapatillas de su referencia. Tiene todas las acciones básicas, incluido el gancho agachado.
+
+Con L (1P), 9 (2P) o PODER en celular lanza su bigote por 35 de energía. Sale físicamente del rostro, gira y vuelve al alcanzar su recorrido, un borde o al conectar/bloquearse. Sigue al dueño incluso si se mueve, salta o se agacha. Solo hace daño una vez por lanzamiento (13) y no permite otro bigote hasta recuperarlo. La cara se dibuja sin bigote durante el vuelo y lo recupera al atraparlo. Fin de round y salida limpian el proyectil.
+
+El sonido de boomerang es un efecto procedural de aire giratorio (assets/boomerang.wav), con una voz independiente por lanzamiento. Comienza al ejecutar el poder, se pausa con la pelea y termina al recuperar el bigote. El ranking compartido admite victorias de Facu.
+
+El atlas conserva las caras afeitadas y el motor compone el bigote como una pieza independiente antes de mezclar poses. El fondo de exportación se elimina al cargar cada cuadro, sin modificar las siluetas. Imágenes generadas a partir de la referencia de Facu: atlas de 12 posturas, rostro sin bigote, ropa negra y dirección derecha; retrato con bigote prominente y fondo azul.

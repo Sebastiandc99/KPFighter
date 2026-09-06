@@ -996,3 +996,7 @@ button, .name-row strong, .choice-tile strong, .stage-card strong { font-weight:
 .two-touch .fight-screen .health-shell { height: clamp(24px, 8.5cqh, 44px); }
 .two-touch .fight-screen .round-label { top: 27%; }
 .two-touch .fight-screen .corner-btn { top: 2%; }
+/* Five selectable fighters fit the same arcade selection screen. */
+.choice-tile { width: clamp(38px, 7.8cqw, 86px); }
+.phone-portrait .choice-tile { width: clamp(38px, 7.8cqw, 86px); }
+.portrait-facu { left: 7%; }

@@ -46,6 +46,7 @@ const stageRoster = Object.keys(stages);
 const stageImages = Object.fromEntries(stageRoster.map(key => [key, loadImage(stages[key].src)]));
 
 const assets = {
+  facu: loadImage("assets/facu-atlas-v1.png"),
   uppercuts: loadImage("assets/uppercuts-v1.png"),
   arena: loadImage("assets/arena.jpg"),
   sergio: loadImage("assets/sergio-attack-v4.png"),
@@ -59,6 +60,7 @@ const assets = {
 };
 
 const POSES = {
+  facu: {idle:0, punch:1, kick:2, hit:3, power:4, sweep:5},
   sergio: { idle: 0, punch: 1, kick: 2, hit: 3, meat: 4, bottle: 5 },
   blotta: { idle: 0, punch: 1, kick: 2, sweep: 3, hit: 4, power: 5 },
   tunki: { idle: 0, punch: 1, kick: 2, hit: 3, power: 4, slam: 5 },
@@ -66,13 +68,14 @@ const POSES = {
 };
 
 const stats = {
+  facu: { name: "FACU", speed: 276, jump: 615, defaultFace: 1, size: 222, height: 188, width: 25, description: "BIGOTE BOOMERANG", ability: null },
   sergio: { name: "SERGIO", speed: 260, jump: 595, defaultFace: 1, size: 210, height: 184, width: 32, description: "PANZAZO · ASADO · FERNET", ability: null },
   blotta: { name: "BLOTTA", speed: 278, jump: 620, defaultFace: -1, size: 214, height: 180, width: 25, description: "KARATE · ENERGÍA · HUMO", ability: "teleport" },
   tunki: { name: "LA TUNKI", speed: 246, jump: 605, defaultFace: 1, size: 202, height: 174, width: 32, description: "FLORES · SALTO APLASTANTE", ability: "slam" },
   marechal: { name: "MARECHAL", speed: 270, jump: 620, defaultFace: 1, size: 242, height: 202, width: 23, description: "ARTES MARCIALES · RAYOS", ability: null }
 };
 
-const roster = Object.keys(stats);
+const roster = ["sergio", "blotta", "tunki", "marechal", "facu"];
 const FLOOR = 448;
 const STEP = 1 / 120;
 const JUMP_BOOST = 1.25;
@@ -94,6 +97,7 @@ const MOVES = {
 };
 
 const COMBAT_AUDIO = {
+  boomerang: {src: "assets/boomerang.wav", volume: 1.1, start: 0, end: 1},
   // Skip measured leading silence so even a close-range jab is audible.
   general: { src: "assets/golpe-general.mp3", volume: .32, start: .18, end: .59 },
   belly: { src: "assets/panzazo-sergio.mp3", volume: .36, start: .035 },
@@ -260,7 +264,7 @@ function makeFighter(kind, x, isPlayer) {
     kind, x, y: FLOOR, prevX: x, prevY: FLOOR, vx: 0, vy: 0, health: 100, power: 40,
     isPlayer, grounded: true, action: "idle", actionTime: 0,
     actionDuration: 0, animClock: Math.random() * 4, trailClock: 0,
-    specialSpawned: false, specialStyle: "ki",
+    mustacheAway: false, specialSpawned: false, specialStyle: "ki",
     queuedAction: null, queueTime: 0,
     crouching: false, guarding: false, guardTime: 0, crouchTime: 0,
     teleportDone: false, teleportSmokeStarted: false, teleportTarget: x,
@@ -818,6 +822,7 @@ function attack(f, type) {
     if (humanFighter(f)) queueAction(f, type);
     return false;
   }
+  if (type === "special" && f.kind === "facu" && f.mustacheAway) return false;
   const cost = type === "special" ? 35 : ["teleport", "slam"].includes(type) ? 30 : 0;
   if (cost && (f.power < cost || f.specialCooldown > 0 || (!f.grounded && type !== "slam"))) {
     if (humanFighter(f)) sfx("empty");
@@ -850,7 +855,7 @@ function attack(f, type) {
     f.vx = f.vy = 0;
   } else if (type === "special") {
     f.specialSpawned = false;
-    f.specialStyle = f.kind === "sergio" ? (f.projectileToggle++ % 2 ? "bottle" : "meat") : f.kind === "tunki" ? "flowers" : f.kind === "marechal" ? "lightning" : "ki";
+    f.specialStyle = f.kind === "facu" ? "boomerang" : f.kind === "sergio" ? (f.projectileToggle++ % 2 ? "bottle" : "meat") : f.kind === "tunki" ? "flowers" : f.kind === "marechal" ? "lightning" : "ki";
     if (COMBAT_AUDIO[f.specialStyle]) f.attackSound = startCombatSound(f.specialStyle);
     f.vx = 0;
   } else if (type === "kick" && !low && f.grounded) {
@@ -868,6 +873,7 @@ function attack(f, type) {
 }
 
 function spawnProjectile(owner, style) {
+  if (style === "boomerang") { spawnBoomerang(owner); return; }
   const config = style === "ki" ? { speed: 470, damage: 13, radius: 16 } :
     style === "lightning" ? { speed: 560, damage: 13, radius: 15 } :
     style === "flowers" ? { speed: 405, damage: 14, radius: 20 } :
@@ -889,6 +895,7 @@ function spawnProjectile(owner, style) {
 function updateProjectiles(dt) {
   for (let i = projectiles.length - 1; i >= 0; i--) {
     const p = projectiles[i];
+    if (p.style === "boomerang") { updateBoomerang(p, dt); if (state !== "playing") return; continue; }
     p.life -= dt;
     p.x += p.vx * dt;
     p.spin += dt * 8;
@@ -1161,7 +1168,7 @@ function smokeBurst(x, y, count) {
 
 function addAfterimage(f) {
   afterimages.push({
-    kind: f.kind,
+    kind: f.kind, mustacheAway: f.mustacheAway,
     pose: poseFor(f),
     x: f.x,
     y: f.y,
@@ -1192,7 +1199,7 @@ function updateParticles(dt) {
 }
 
 function powerColor(kind) {
-  return { sergio: "#ffc650", blotta: "#76daff", tunki: "#ff8bd5", marechal: "#a5eaff" }[kind];
+  return { facu: "#ffe47a", sergio: "#ffc650", blotta: "#76daff", tunki: "#ff8bd5", marechal: "#a5eaff" }[kind];
 }
 
 function addEffect(type, x, y, color, radius, life) {
@@ -1298,6 +1305,7 @@ function poseFor(f) {
       return f.lowAttack ? 8 : !f.grounded ? 10 : POSES[f.kind].idle;
     }
   }
+  if (f.kind === "facu" && f.lowAttack && f.action === "kick") return POSES.facu.sweep;
   if (f.kind === "marechal" && f.lowAttack && f.action === "kick") return POSES.marechal.sweep;
   if (f.lowAttack) return f.kind === "blotta" && f.action === "kick" ? POSES.blotta.sweep : 8;
   if (f.action === "punch") {
@@ -1308,6 +1316,7 @@ function poseFor(f) {
     if (progress < .15) return POSES[f.kind].idle;
     if (f.kind === "blotta") return POSES.blotta.power;
     if (f.kind === "tunki") return POSES.tunki.power;
+    if (f.kind === "facu") return POSES.facu.power;
     if (f.kind === "marechal") return POSES.marechal.power;
     return f.projectileToggle % 2 ? POSES.sergio.meat : POSES.sergio.bottle;
   }
@@ -1450,7 +1459,7 @@ function renderedFighter(f) {
   for (const key of Object.keys(animation.motion)) {
     motion[key] = lerp(animation.prevMotion[key], animation.motion[key], renderAlpha);
   }
-  return { kind: f.kind, x: lerp(f.prevX, f.x, renderAlpha), y: lerp(f.prevY, f.y, renderAlpha),
+  return { kind: f.kind, mustacheAway: f.mustacheAway, x: lerp(f.prevX, f.x, renderAlpha), y: lerp(f.prevY, f.y, renderAlpha),
     facing: f.facing, pose: animation.pose, fromPose: animation.fromPose,
     mix: smoothstep(lerp(animation.prevMix, animation.mix, renderAlpha)), motion };
 }
@@ -1555,6 +1564,7 @@ function drawMotionLines(f, motion) {
 }
 
 function spriteFrame(frame) {
+  if (frame.kind === "facu") return facuSpriteFrame(frame);
   const key = frame.kind + ":" + frame.pose;
   if (spriteFrames.has(key)) return spriteFrames.get(key);
   const uppercut = frame.pose === 12;
@@ -1584,7 +1594,7 @@ function spriteFrame(frame) {
 function blendedSprite(frame) {
   const current = spriteFrame(frame);
   if (!current || frame.mix == null || frame.mix >= 1 || frame.fromPose === frame.pose) return current;
-  const previous = spriteFrame({ kind: frame.kind, pose: frame.fromPose });
+  const previous = spriteFrame({ kind: frame.kind, pose: frame.fromPose, mustacheAway: frame.mustacheAway });
   if (!previous) return current;
   let surface = poseBlendSurfaces.get(frame.kind);
   if (!surface) {
@@ -1604,6 +1614,95 @@ function blendedSprite(frame) {
   paint.globalAlpha = 1;
   paint.globalCompositeOperation = "source-over";
   return surface;
+}
+
+// The generated sheet has clean-shaven faces. The detachable piece is composited
+// into each pose before blending, so it follows crouches, hits and jumps exactly.
+const FACU_FRAMES = [
+  [32,10,284,354,197,85,0], [377,14,324,349,545,89,0],
+  [734,3,379,359,832,72,0], [1168,25,259,335,1251,86,-.2],
+  [12,378,352,339,175,456,0], [372,475,343,239,489,543,0],
+  [776,367,240,345,915,433,0], [1161,368,243,342,1300,434,0],
+  [46,833,232,236,197,910,0], [407,727,265,348,548,803,0],
+  [785,716,210,292,927,783,0], [1187,708,170,377,1275,807,-.25]
+];
+function facuPose(pose) { return pose === 12 ? 11 : Math.min(10, pose); }
+function facuFace(pose) {
+  const [x,y,w,h,mx,my,angle] = FACU_FRAMES[facuPose(pose)];
+  return {x:135+(mx-x-w/2)*.66, y:260+(my-y-h)*.66, angle};
+}
+function drawMustache(paint, x, y, width, angle = 0) {
+  paint.save(); paint.translate(x,y); paint.rotate(angle); paint.scale(width/40,width/40);
+  paint.fillStyle="#1c0e0b"; paint.beginPath();
+  paint.moveTo(0,-2); paint.bezierCurveTo(-7,-9,-12,4,-20,-5);
+  paint.bezierCurveTo(-21,9,-6,12,0,3); paint.bezierCurveTo(6,12,21,9,20,-5);
+  paint.bezierCurveTo(12,4,7,-9,0,-2); paint.fill();
+  paint.strokeStyle="#69402a"; paint.lineWidth=1.6; paint.beginPath();
+  paint.moveTo(-17,1);paint.quadraticCurveTo(-9,6,-2,0);
+  paint.moveTo(2,0);paint.quadraticCurveTo(9,6,17,1);paint.stroke();paint.restore();
+}
+function clearSheetMatte(paint) {
+  const pixels=paint.getImageData?.(0,0,270,270);
+  if (!pixels?.data) return; // lightweight headless rendering adapter
+  const data=pixels.data, seen=new Uint8Array(270*270), queue=[];
+  const visit=index=>{
+    if(seen[index])return;seen[index]=1;const n=index*4;
+    const hi=Math.max(data[n],data[n+1],data[n+2]),lo=Math.min(data[n],data[n+1],data[n+2]);
+    if(data[n+3]===0 || (lo>170 && hi-lo<24)){queue.push(index);data[n+3]=0;}
+  };
+  for(let n=0;n<270;n++){visit(n);visit(269*270+n);visit(n*270);visit(n*270+269);}
+  for(let k=0;k<queue.length;k++){const n=queue[k],x=n%270,y=Math.floor(n/270);if(x)visit(n-1);if(x<269)visit(n+1);if(y)visit(n-270);if(y<269)visit(n+270);}
+  paint.putImageData(pixels,0,0);
+}
+function facuSpriteFrame(frame) {
+  const pose=facuPose(frame.pose), key="facu:"+pose+":"+!!frame.mustacheAway;
+  if(spriteFrames.has(key))return spriteFrames.get(key);
+  const image=assets.facu;if(!image.complete || !image.naturalWidth)return null;
+  const surface=document.createElement("canvas");surface.width=surface.height=270;
+  const paint=surface.getContext("2d"),[x,y,w,h]=FACU_FRAMES[pose];
+  paint.imageSmoothingEnabled=false;
+  paint.drawImage(image,x,y,w,h,135-w*.33,260-h*.66,w*.66,h*.66);
+  clearSheetMatte(paint);
+  if(!frame.mustacheAway){const face=facuFace(frame.pose);drawMustache(paint,face.x,face.y,22,face.angle);}
+  spriteFrames.set(key,surface);return surface;
+}
+function facuMouth(f) {
+  const face=facuFace(poseFor(f)), size=stats.facu.size*FIGHTER_SCALE/270;
+  const motion=fighterMotion(f),flip=f.facing===stats.facu.defaultFace?1:-1;
+  const x=(face.x-135)*size*flip*motion.scaleX, y=(face.y-260)*size*motion.scaleY;
+  return {x:f.x+motion.dx+x*Math.cos(motion.rotation)-y*Math.sin(motion.rotation),y:f.y+motion.dy+x*Math.sin(motion.rotation)+y*Math.cos(motion.rotation)};
+}
+function spawnBoomerang(owner) {
+  if(owner.mustacheAway)return;
+  const mouth=facuMouth(owner),sound=owner.attackSound || startCombatSound("boomerang");
+  owner.attackSound=null;owner.mustacheAway=true;
+  projectiles.push({owner,style:"boomerang",sound,x:mouth.x,y:mouth.y,prevX:mouth.x,prevY:mouth.y,
+    vx:owner.facing*500,vy:0,damage:13,radius:19,life:4,age:0,returning:false,contactDone:false,
+    spin:0,prevSpin:0,trailTime:0,trail:[]});
+}
+function catchBoomerang(p) {
+  p.owner.mustacheAway=false;stopCombatSound(p.sound);
+  const index=projectiles.indexOf(p);if(index>=0)projectiles.splice(index,1);
+}
+function updateBoomerang(p,dt) {
+  p.age+=dt;p.life-=dt;p.spin+=dt*18;
+  const mouth=facuMouth(p.owner);
+  if(!p.returning && (p.age>=.62 || p.x-p.radius<=0 || p.x+p.radius>=VIEW_WIDTH))p.returning=true;
+  if(p.returning){
+    const dx=mouth.x-p.x,dy=mouth.y-p.y,distance=Math.hypot(dx,dy),speed=690;
+    if(distance<=speed*dt+8 || p.life<=0){catchBoomerang(p);return;}
+    p.vx=dx/distance*speed;p.vy=dy/distance*speed;
+  }
+  p.x+=p.vx*dt;p.y+=p.vy*dt;
+  p.trailTime-=dt;
+  if(p.trailTime<=0){p.trail.unshift({x:p.x,y:p.y});if(p.trail.length>9)p.trail.pop();p.trailTime=.025;}
+  const target=p.owner===player?cpu:player;
+  const box={left:p.x-p.radius,right:p.x+p.radius,top:p.y-p.radius,bottom:p.y+p.radius};
+  if(!p.contactDone && !isVanished(target) && target.invuln<=0 && overlaps(box,hurtBox(target))){
+    p.contactDone=true;p.returning=true;
+    hit(target,p.damage,Math.sign(p.vx)*180,0,p.owner,{direction:Math.sign(p.vx),sourceX:p.x-Math.sign(p.vx)*p.radius,projectile:true,low:false,x:p.x,y:p.y});
+    burst(p.x,p.y,"#ffe47a",10);
+  }
 }
 
 function drawSpriteFrame(frame, alpha = 1, ghost = false) {
@@ -1697,7 +1796,10 @@ function drawProjectile(p) {
   ctx.translate(lerp(p.prevX, p.x, renderAlpha), lerp(p.prevY, p.y, renderAlpha));
   ctx.scale(FIGHTER_SCALE, FIGHTER_SCALE);
   ctx.rotate(p.style === "ki" || p.style === "lightning" ? 0 : lerp(p.prevSpin, p.spin, renderAlpha) * Math.sign(p.vx));
-  if (p.style === "lightning") {
+  if (p.style === "boomerang") {
+    ctx.shadowColor = "#ffe171"; ctx.shadowBlur = 9 * drawingScale;
+    drawMustache(ctx, 0, 0, 54, 0);
+  } else if (p.style === "lightning") {
     ctx.scale(Math.sign(p.vx) || 1, 1);
     ctx.lineJoin = "miter";
     ctx.shadowColor = "#139bff";
@@ -1810,7 +1912,7 @@ function updateHud() {
   document.getElementById("roundLabel").textContent = ROUND_AUDIO[match.round].title + " · " + match.playerWins + " — " + match.cpuWins;
   document.querySelectorAll("#leftRounds i").forEach((dot, index) => dot.classList.toggle("won", index < match.playerWins));
   document.querySelectorAll("#rightRounds i").forEach((dot, index) => dot.classList.toggle("won", index < match.cpuWins));
-  document.querySelector('[data-tap="special"]').classList.toggle("ready", player.power >= 35 && player.specialCooldown === 0);
+  document.querySelector('[data-tap="special"]').classList.toggle("ready", player.power >= 35 && player.specialCooldown === 0 && !player.mustacheAway);
   ui.abilityBtn.classList.toggle("ready", player.power >= 30 && player.specialCooldown === 0);
   document.getElementById("abilityBtn2").classList.toggle("ready", cpu.power >= 30 && cpu.specialCooldown === 0);
 }
@@ -1912,7 +2014,7 @@ function disconnectCombatVoice(voice) {
 function stopCombatSound(voice, immediate = false) {
   if (!voice) return;
   combatSounds.delete(voice);
-  const minAudible = ["lightning", "meat", "flowers"].includes(voice.name) ? .08 : 0;
+  const minAudible = ["lightning", "meat", "flowers", "boomerang"].includes(voice.name) ? .08 : 0;
   const heard = voice.audibleAt === null ? 0 : Math.max(0, (audioCtx?.currentTime ?? voice.elapsed) - voice.audibleAt);
   if (!immediate && voice.source && minAudible > heard && !muted && state === "playing") {
     // At point-blank range retain only a short attack transient, never the whole clip.
@@ -1933,8 +2035,9 @@ function stopFighterSound(f) {
 
 function stopAllCombatSounds() {
   stopSynthSounds();
+  projectiles = projectiles.filter(p => p.style !== "boomerang");
   for (const voice of [...combatSounds, ...soundTails]) stopCombatSound(voice, true);
-  fighters.forEach(f => { f.attackSound = null; });
+  fighters.forEach(f => { f.attackSound = null; f.mustacheAway = false; });
 }
 
 function suspendCombatSounds(includeTails = true) {

@@ -27,8 +27,8 @@ function game() {
     }
     return nodes.get(id);
   }
-  const picks = ["sergio", "blotta", "tunki", "marechal"].map(kind => node("pick-" + kind, { pick: kind }));
-  const portraits = ["sergio", "blotta", "tunki", "marechal"].map(kind => node("portrait-" + kind, { portrait: kind }));
+  const picks = ["sergio", "blotta", "tunki", "marechal", "facu"].map(kind => node("pick-" + kind, { pick: kind }));
+  const portraits = ["sergio", "blotta", "tunki", "marechal", "facu"].map(kind => node("portrait-" + kind, { portrait: kind }));
   const stages = ["arcade", "mine", "newmont"].map(stage => node("stage-" + stage, { stage }));
   const leftRounds = [0, 1].map(i => node("left-round-" + i));
   const rightRounds = [0, 1].map(i => node("right-round-" + i));
@@ -217,8 +217,8 @@ test("an input buffered near recovery executes and damage stops at round end", (
 });
 
 test("all character matchups finish simulated fights with AI and rendering enabled", () => {
-  for (const kind of ["sergio", "blotta", "tunki", "marechal"]) {
-   for (const rival of ["sergio", "blotta", "tunki", "marechal"].filter(other => other !== kind)) {
+  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu"]) {
+   for (const rival of ["sergio", "blotta", "tunki", "marechal", "facu"].filter(other => other !== kind)) {
     const g = game();
     g.run('startGame("' + kind + '"); state = "playing"; aiEnabled = true;');
     g.run('cpu.kind = match.cpuKind = "' + rival + '";');
@@ -397,7 +397,7 @@ test("Marechal's lightning can be blocked or ducked like other high projectiles"
 });
 
 test("stance transitions interpolate, backward steps reverse, and attacks settle into rest", () => {
-  for (const kind of ["sergio", "blotta", "tunki", "marechal"]) {
+  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu"]) {
     const g = game();
     g.run('startGame("' + kind + '"); state = "playing";');
     g.key("KeyS");
@@ -577,7 +577,7 @@ test("timeout awards the healthier fighter and ties replay without awarding a wi
 
 test("simultaneous lethal hits draw the round and pause freezes the interval", () => {
   const g = game();
-  g.run('player.x = 300; cpu.x = 355; player.health = cpu.health = 5; attack(player, "punch"); attack(cpu, "punch");');
+  g.run('player.x = 300; cpu.x = 355; player.health = cpu.health = 3; attack(player, "punch"); attack(cpu, "punch");');
   g.tick(.12);
   assert.equal(g.run("player.health + cpu.health"), 0);
   assert.equal(g.run("match.playerWins + match.cpuWins"), 0);
@@ -593,7 +593,7 @@ test("simultaneous lethal hits draw the round and pause freezes the interval", (
 });
 
 test("all fighters jump higher, remain in view and land without dealing automatic damage", () => {
-  for (const kind of ["sergio", "blotta", "tunki", "marechal"]) {
+  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu"]) {
     const g = game();
     g.run('startGame("' + kind + '"); state = "playing"; var minY = FLOOR;');
     g.key("KeyW");
@@ -685,7 +685,7 @@ function enableCombatAudio(g) {
 }
 
 test("all four fighters uppercut with down+punch on keyboard and touch, launch once and return to crouch", () => {
-  for (const kind of ["sergio", "blotta", "tunki", "marechal"]) {
+  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu"]) {
     for (const input of ["keyboard", "touch"]) {
       const g = game();
       g.run(`startGame('${kind}', '${kind === "blotta" ? "marechal" : "blotta"}'); state = "playing"; player.x = 300; cpu.x = 370;`);
@@ -952,4 +952,46 @@ test('all damaging powers exceed every normal melee attack', () => {
     assert.ok(g.run('projectiles.at(-1).damage')>maxNormal,style);
   }
   assert.ok(g.run('MOVES.slam.damage')>maxNormal);
+});
+
+test('Facu can be selected by either player, including mirror matches',()=>{
+ const g=game();g.run('startMode("versus"); chooseFighter("facu",false); confirmFighter(); chooseFighter("facu",false); confirmFighter(); startGame(playerChoice); state="playing"');
+ assert.equal(g.run('player.kind+":"+cpu.kind'),'facu:facu');
+ g.key('KeyL');g.key('Digit9');g.tick(.22);
+ assert.equal(g.run('projectiles.length'),2);assert.ok(g.run('player.mustacheAway && cpu.mustacheAway'));
+});
+
+test('Facu throws once, visibly loses his mustache and catches it after moving and jumping',()=>{
+ const g=game();g.run('startGame("facu","sergio"); state="playing"; player.x=200; cpu.x=880');enableCombatAudio(g);
+ const withMustache=g.run('spriteFrame(renderedFighter(player))');g.key('KeyL');
+ assert.equal(g.run('combatLog.filter(e=>e.event==="start" && e.name==="boomerang").length'),1);
+ g.tick(.23);assert.equal(g.run('player.mustacheAway'),true);
+ assert.notEqual(g.run('spriteFrame(renderedFighter(player))'),withMustache);
+ g.tick(.3);g.run('player.power=100; player.specialCooldown=0');
+ assert.equal(g.run('attack(player,"special")'),false);assert.equal(g.run('player.power'),100);
+ g.key('KeyA');g.key('KeyW');g.tick(1.7);
+ assert.equal(g.run('player.mustacheAway'),false);assert.equal(g.run('projectiles.length'),0);
+ assert.equal(g.run('combatSounds.size'),0);
+});
+
+test('boomerang returns on close hit or block, deals damage once and survives pause correctly',()=>{
+ for(const guarded of [false,true]){
+  const g=game();g.run('startGame("facu","blotta"); state="playing"; player.x=300; cpu.x=369; cpu.facing=-1');
+  if(guarded)g.run('cpu.guardTime=2; cpu.guarding=true');
+  g.key('KeyL');g.tick(.34);
+  assert.equal(g.run('cpu.health'),guarded?99:87);
+  g.key('Space');const snapshot=g.run('JSON.stringify([projectiles.map(p=>[p.x,p.y,p.age,p.returning]),player.mustacheAway,roundTime])');
+  g.tick(1);assert.equal(g.run('JSON.stringify([projectiles.map(p=>[p.x,p.y,p.age,p.returning]),player.mustacheAway,roundTime])'),snapshot);
+  g.key('Space');g.tick(1.5);assert.equal(g.run('cpu.health'),guarded?99:87);assert.equal(g.run('player.mustacheAway'),false);
+ }
+});
+
+test('Facu recovers the mustache at either edge and clears it on KO and exit',()=>{
+ for(const x of [55,905]){
+  const g=game();g.run(`startGame('facu','blotta');state='playing'; player.x=${x}; player.facing=${x<480?-1:1}; spawnProjectile(player,'boomerang')`);
+  g.tick(.5);assert.equal(g.run('projectiles.length'),0);assert.equal(g.run('player.mustacheAway'),false);
+ }
+ const g=game();g.run('startGame("facu","blotta");state="playing";spawnProjectile(player,"boomerang");finishRound(player,"K.O.")');
+ assert.equal(g.run('player.mustacheAway'),false);assert.equal(g.run('projectiles.length'),0);
+ g.run('mainMenu()');assert.equal(g.run('combatSounds.size'),0);
 });
