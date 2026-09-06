@@ -985,18 +985,28 @@ button, .name-row strong, .choice-tile strong, .stage-card strong { font-weight:
   .ranking-screen #rankingStatus { bottom: 12%; }
 }
 
-/* Larger life bars, with score and controls kept below the expanded HUD. */
+/* Slim life bars preserve stage visibility. */
 .fight-screen .health-shell,
 .phone-portrait .fight-screen .health-shell {
-  height: clamp(28px, 6cqw, 64px);
+  height: clamp(10px, 2cqw, 21px);
   border-width: 2px;
 }
 .fight-screen .round-label { top: 28%; }
 .fight-screen .corner-btn { top: 32%; }
-.two-touch .fight-screen .health-shell { height: clamp(24px, 8.5cqh, 44px); }
+.two-touch .fight-screen .health-shell { height: clamp(8px, 3cqh, 15px); }
 .two-touch .fight-screen .round-label { top: 27%; }
 .two-touch .fight-screen .corner-btn { top: 2%; }
-/* Five selectable fighters fit the same arcade selection screen. */
-.choice-tile { width: clamp(38px, 7.8cqw, 86px); }
-.phone-portrait .choice-tile { width: clamp(38px, 7.8cqw, 86px); }
+/* Six selectable fighters fit the same arcade selection screen. */
+.choice-tile { width: clamp(38px, 7.2cqw, 80px); }
+.phone-portrait .choice-tile { width: clamp(38px, 7.2cqw, 80px); }
 .portrait-facu { left: 7%; }
+
+.portrait-flor { left: 7%; }
+.fight-screen .power-shell { height: clamp(3px, .5cqw, 5px); padding: 0; }
+
+/* Free evasion occupies the vacant sixth action slot. */
+.attack-controls .evade { grid-column: 1; grid-row: 1; }
+.two-touch .player-controls [data-tap="evade"] { grid-column: 1; grid-row: 1; }
+.two-touch .control-owner { position: absolute; left: 0; top: -20px; font-size: 13px; }
+.campaign-status { position: absolute; top: 22%; left: 20%; right: 20%; text-align: center; color: #ffdf67; font: 400 clamp(10px,1.5cqw,17px)/1.2 var(--pixel-font); text-shadow: 1px 2px #091339; z-index: 9; pointer-events: none; }
+.two-touch .campaign-status { top: 17%; }

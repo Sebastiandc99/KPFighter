@@ -27,15 +27,15 @@ function game() {
     }
     return nodes.get(id);
   }
-  const picks = ["sergio", "blotta", "tunki", "marechal", "facu"].map(kind => node("pick-" + kind, { pick: kind }));
-  const portraits = ["sergio", "blotta", "tunki", "marechal", "facu"].map(kind => node("portrait-" + kind, { portrait: kind }));
+  const picks = ["sergio", "blotta", "tunki", "marechal", "facu", "flor"].map(kind => node("pick-" + kind, { pick: kind }));
+  const portraits = ["sergio", "blotta", "tunki", "marechal", "facu", "flor"].map(kind => node("portrait-" + kind, { portrait: kind }));
   const stages = ["arcade", "mine", "newmont"].map(stage => node("stage-" + stage, { stage }));
   const leftRounds = [0, 1].map(i => node("left-round-" + i));
   const rightRounds = [0, 1].map(i => node("right-round-" + i));
   const holds = ["left", "right", "down", "guard"].map(hold => node("hold-" + hold, { hold }));
-  const taps = ["jump", "punch", "kick", "special", "ability"].map(tap => node("tap-" + tap, { tap }));
+  const taps = ["jump", "punch", "kick", "special", "ability", "evade"].map(tap => node("tap-" + tap, { tap }));
   const holds2 = ["left", "right", "down", "guard"].map(hold => node("p2-hold-" + hold, { hold, player: "2" }));
-  const taps2 = ["jump", "punch", "kick", "special", "ability"].map(tap => node("p2-tap-" + tap, { tap, player: "2" }));
+  const taps2 = ["jump", "punch", "kick", "special", "ability", "evade"].map(tap => node("p2-tap-" + tap, { tap, player: "2" }));
   const modes = ["solo", "versus"].map(mode => node(mode + "Btn", {mode}));
   const win = node("window");
   const doc = node("document");
@@ -128,7 +128,7 @@ test("low attacks bypass standing guard but crouching guard blocks them", () => 
   }
 });
 
-test("Blotta vanishes, leaves smoke at both positions and spends power once", () => {
+test("Blotta vanishes and leaves smoke at both positions without spending power", () => {
   const g = game();
   g.run('startGame("blotta"); state = "playing"; player.power = 65;');
   const startX = g.run("player.x");
@@ -143,10 +143,10 @@ test("Blotta vanishes, leaves smoke at both positions and spends power once", ()
   assert.ok(Math.abs(g.run("player.x") - startX) > 100);
   assert.ok(g.run("player.x >= 65 && player.x <= 895"));
   assert.ok(g.run("particles.filter(p => p.smoke).length") > 20);
-  assert.ok(g.run("player.power") < 38);
+  assert.ok(g.run("player.power") >= 65);
   g.tick(.4);
   assert.equal(g.run("isVanished(player)"), false);
-  assert.equal(g.run('attack(player, "teleport")'), false);
+  assert.equal(g.run('attack(player, "teleport")'), true);
 });
 
 test("Space toggles pause without attacking and freezes intro and teleport", () => {
@@ -217,8 +217,8 @@ test("an input buffered near recovery executes and damage stops at round end", (
 });
 
 test("all character matchups finish simulated fights with AI and rendering enabled", () => {
-  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu"]) {
-   for (const rival of ["sergio", "blotta", "tunki", "marechal", "facu"].filter(other => other !== kind)) {
+  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu", "flor"]) {
+   for (const rival of ["sergio", "blotta", "tunki", "marechal", "facu", "flor"].filter(other => other !== kind)) {
     const g = game();
     g.run('startGame("' + kind + '"); state = "playing"; aiEnabled = true;');
     g.run('cpu.kind = match.cpuKind = "' + rival + '";');
@@ -397,7 +397,7 @@ test("Marechal's lightning can be blocked or ducked like other high projectiles"
 });
 
 test("stance transitions interpolate, backward steps reverse, and attacks settle into rest", () => {
-  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu"]) {
+  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu", "flor"]) {
     const g = game();
     g.run('startGame("' + kind + '"); state = "playing";');
     g.key("KeyS");
@@ -593,7 +593,7 @@ test("simultaneous lethal hits draw the round and pause freezes the interval", (
 });
 
 test("all fighters jump higher, remain in view and land without dealing automatic damage", () => {
-  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu"]) {
+  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu", "flor"]) {
     const g = game();
     g.run('startGame("' + kind + '"); state = "playing"; var minY = FLOOR;');
     g.key("KeyW");
@@ -685,7 +685,7 @@ function enableCombatAudio(g) {
 }
 
 test("all four fighters uppercut with down+punch on keyboard and touch, launch once and return to crouch", () => {
-  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu"]) {
+  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu", "flor"]) {
     for (const input of ["keyboard", "touch"]) {
       const g = game();
       g.run(`startGame('${kind}', '${kind === "blotta" ? "marechal" : "blotta"}'); state = "playing"; player.x = 300; cpu.x = 370;`);
@@ -994,4 +994,68 @@ test('Facu recovers the mustache at either edge and clears it on KO and exit',()
  const g=game();g.run('startGame("facu","blotta");state="playing";spawnProjectile(player,"boomerang");finishRound(player,"K.O.")');
  assert.equal(g.run('player.mustacheAway'),false);assert.equal(g.run('projectiles.length'),0);
  g.run('mainMenu()');assert.equal(g.run('combatSounds.size'),0);
+});
+
+test('Flor is selectable by both players and hockey works on touch with pause and cleanup',()=>{
+ const g=game();g.run('startMode("versus");chooseFighter("flor",false);confirmFighter();chooseFighter("flor",false);confirmFighter();startGame(playerChoice);state="playing";player.x=180;cpu.x=800');
+ assert.equal(g.run('player.kind+":"+cpu.kind'),'flor:flor');
+ enableCombatAudio(g);g.key('KeyL');g.key('Digit9');g.tick(.23);
+ assert.equal(g.run('projectiles.filter(p=>p.style==="hockey").length'),2);
+ assert.equal(g.run('combatLog.filter(e=>e.event==="start"&&e.name==="hockey").length'),2);
+ g.key('Space');const before=g.run('JSON.stringify(projectiles.map(p=>[p.x,p.y,p.life]))');g.tick(.5);
+ assert.equal(g.run('JSON.stringify(projectiles.map(p=>[p.x,p.y,p.life]))'),before);
+ g.key('Space');g.tick(2);assert.equal(g.run('projectiles.length'),0);assert.equal(g.run('combatSounds.size'),0);
+});
+test('Flor hockey deals special damage once, blocks and starts audio at point blank',()=>{
+ for(const guard of [false,true]){
+  const g=game();g.run('startGame("flor","blotta");state="playing";player.x=300;cpu.x=360;cpu.facing=-1');enableCombatAudio(g);
+  if(guard)g.run('cpu.guardTime=2;cpu.guarding=true');
+  g.key('KeyL');assert.equal(g.run('combatLog.filter(e=>e.event==="start"&&e.name==="hockey").length'),1);
+  g.tick(.5);assert.equal(g.run('cpu.health'),guard?99:87);assert.equal(g.run('projectiles.length'),0);
+ }
+ const g=game();g.run('startGame("flor","sergio");state="playing";player.x=200;cpu.x=800');
+ g.taps[3].listeners.pointerdown({pointerId:44,preventDefault(){}});g.tick(.23);
+ assert.equal(g.run('projectiles[0].style'),'hockey');assert.ok(g.run('stats.flor.height < stats.facu.height'));
+});
+
+test('free roll escapes both corners through rivals, costs no power, pauses and cannot attack while rolling',()=>{
+ for(const x of [55,905]){
+  const g=game();g.run(`startGame('flor','sergio');state='playing';player.x=${x};cpu.x=${x<480?110:850};player.power=0;player.specialCooldown=5`);
+  g.key('KeyO');assert.equal(g.run('player.action'),'roll');assert.equal(g.run('player.power'),0);
+  const hp=g.run('player.health');g.run('hit(player,20,100,0,cpu)');assert.equal(g.run('player.health'),hp);
+  g.tick(.1);g.key('Space');const before=g.run('JSON.stringify([player.x,player.actionTime,player.animation.motion])');g.tick(1);
+  assert.equal(g.run('JSON.stringify([player.x,player.actionTime,player.animation.motion])'),before);
+  g.key('Space');g.key('KeyJ');assert.equal(g.run('player.action'),'roll');g.tick(.42);
+  assert.ok(g.run(x<480?'player.x>cpu.x':'player.x<cpu.x'));assert.equal(g.run('cpu.health'),100);
+  g.run('player.queuedAction=null;player.action="idle";player.actionTime=0');assert.equal(g.run('evade(player)'),true);
+ }
+});
+test('both touch players evade independently and Blotta smoke ignores power cooldown',()=>{
+ const g=game();g.run('gameMode="versus";startGame("sergio","blotta");state="playing";player.power=cpu.power=0;cpu.specialCooldown=5');
+ const e={pointerId:1,preventDefault(){}};g.taps[5].listeners.pointerdown(e);g.taps2[5].listeners.pointerdown({...e,pointerId:2});
+ assert.equal(g.run('player.action'),'roll');assert.equal(g.run('cpu.action'),'teleport');assert.equal(g.run('cpu.power'),0);
+ g.tick(.72);assert.equal(g.run('evade(cpu)'),true);assert.equal(g.run('cpu.action'),'teleport');
+ g.run('mainMenu()');assert.equal(g.run('fighters.length'),0);assert.equal(g.run('campaign'),null);
+});
+test('solo tournament visits every different rival, grows difficulty and carries score to its final GAME OVER',()=>{
+ const g=game();g.run('gameMode="solo";playerChoice="flor";beginGame()');const seen=[];let score=0;let previousReaction=1;
+ for(let i=0;i<5;i++){
+  seen.push(g.run('cpu.kind'));assert.notEqual(seen[i],'flor');assert.equal(g.run('campaign.index'),i);
+  assert.ok(g.run('difficulty().reaction')<previousReaction);previousReaction=g.run('difficulty().reaction');
+  assert.equal(g.run('match.scores[0]'),score);
+  g.run('state="playing";match.playerWins=1;finishRound(player,"K.O.")');score=g.run('match.scores[0]');
+  assert.ok(score>0);
+  if(i<4){g.tick(.9);assert.notEqual(g.nodes.get('resultKicker').textContent,'GAME OVER');g.key('Space');g.tick(3);assert.equal(g.run('campaign.index'),i);g.key('Space');g.tick(1.9);assert.equal(g.run('state'),'intro');}
+ }
+ assert.equal(new Set(seen).size,5);g.tick(2.3);assert.equal(g.nodes.get('resultKicker').textContent,'GAME OVER');
+ assert.equal(g.run('campaign.completed'),true);assert.equal(g.nodes.get('winnerForm').hidden,false);
+ assert.equal(g.run('campaign.score'),score);
+});
+test('a defeated solo player can record accumulated progress and automatically sees the global ranking',async()=>{
+ const g=game();g.run('gameMode="solo";playerChoice="facu";beginGame();state="playing";addScore(player,100);match.playerWins=1;finishRound(player,"K.O.")');g.tick(2.8);
+ const carried=g.run('match.scores[0]');g.run('state="playing";addScore(player,100)');assert.equal(g.run('match.scores[0]'),carried+125);
+ g.run('match.cpuWins=1;finishRound(cpu,"K.O.")');g.tick(4);assert.equal(g.run('state'),'finished');assert.equal(g.nodes.get('winnerForm').hidden,false);
+ let posted;g.sandbox.fetch=async(url,options)=>{if(options.method==='POST'){posted=JSON.parse(options.body);return {ok:true,json:async()=>({})};}return {ok:true,json:async()=>({entries:[{...posted,createdAt:1}],next:null})};};
+ g.nodes.get('winnerName').value='Seba';await g.run('saveWinner({preventDefault(){}})');
+ assert.equal(posted.character,'facu');assert.equal(posted.score,g.run('match.scores[0]'));assert.equal(g.run('state'),'ranking');
 });

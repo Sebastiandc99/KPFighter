@@ -8,7 +8,7 @@
   <title>KP FIGHTER</title>
   <link rel="preload" href="assets/fonts/Bangers-Regular.woff" as="font" type="font/woff" crossorigin>
   <link rel="preload" href="assets/fonts/VT323-Regular.woff" as="font" type="font/woff" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260906j">
+  <link rel="stylesheet" href="style.css?v=20260906k">
 </head>
 <body>
   <main id="arcade" class="arcade" aria-label="KP Fighter">
@@ -60,6 +60,7 @@
         <img src="assets/marechal-portrait-v1.png" alt="">
         <span>MARECHAL</span>
       </div>
+      <div class="portrait portrait-flor" data-portrait="flor" aria-hidden="true"><img src="assets/flor-portrait-v1.png" alt=""><span>FLOR</span></div>
       <div class="portrait portrait-facu" data-portrait="facu" aria-hidden="true"><img src="assets/facu-portrait-v1.png" alt=""><span>FACU</span></div>
       <div class="selection-info" aria-live="polite">
         <p id="selectionPrompt" class="selection-kicker">JUGADOR 1 · ELIGE TU LUCHADOR</p>
@@ -91,6 +92,7 @@
             <strong>MARECHAL</strong>
           </button>
           <button class="choice-tile" type="button" data-pick="facu" aria-label="Elegir a Facu"><span class="p1-arrow" aria-hidden="true">▼<small>1P</small></span><img src="assets/facu-portrait-v1.png" alt="Facu"><strong>FACU</strong></button>
+          <button class="choice-tile" type="button" data-pick="flor" aria-label="Elegir a Flor"><span class="p1-arrow" aria-hidden="true">▼<small>1P</small></span><img src="assets/flor-portrait-v1.png" alt="Flor"><strong>FLOR</strong></button>
         </div>
         <button id="confirmBtn" class="confirm-btn" type="button">ELEGIR ESCENARIO</button>
       </div>
@@ -149,6 +151,7 @@
           <div id="rightRounds" class="round-wins"><i></i><i></i></div>
         </div>
       </div>
+      <div id="campaignStatus" class="campaign-status" hidden></div>
       <div id="roundLabel" class="round-label">ROUND 1 · AL MEJOR DE 3</div>
       <p id="roundNotice" class="round-notice" hidden></p>
 
@@ -170,7 +173,7 @@
         <h2 id="resultTitle">¡GANASTE!</h2>
         <p id="finalScore" class="final-score"></p>
         <form id="winnerForm" class="winner-form" hidden>
-          <label for="winnerName">GANADOR · ESCRIBÍ TU NOMBRE</label>
+          <label for="winnerName">ESCRIBÍ TU NOMBRE PARA EL RANKING</label>
           <div class="name-entry"><input id="winnerName" name="winnerName" maxlength="20" autocomplete="nickname" placeholder="Tu nombre" required><button id="saveScoreBtn" class="arcade-btn primary" type="submit">GUARDAR</button></div>
           <p id="saveError" class="form-message" role="status"></p>
         </form>
@@ -189,6 +192,7 @@
           <button class="touch-btn attack kick" data-player="1" data-tap="kick" type="button" aria-label="Patada"><span>B</span><small>PATADA</small></button>
           <button class="touch-btn attack special" data-player="1" data-tap="special" type="button" aria-label="Poder especial"><span>★</span><small>PODER</small></button>
           <button class="touch-btn attack guard" data-player="1" data-hold="guard" type="button" aria-label="Cubrirse"><span>◆</span><small>CUBRIR</small></button>
+          <button id="evadeBtn1" class="touch-btn attack evade" data-player="1" data-tap="evade" type="button" aria-label="Evasión sin gastar energía"><span>↻</span><small id="evadeLabel1">RODAR</small></button>
           <button id="abilityBtn" class="touch-btn attack teleport" data-player="1" data-tap="ability" type="button" aria-label="Habilidad propia" hidden><span id="abilityIcon">☁</span><small id="abilityLabel">HUMO</small></button>
         </div>
       </div>
@@ -205,6 +209,7 @@
           <button class="touch-btn attack kick" data-player="2" data-tap="kick" type="button" aria-label="Patada"><span>B</span><small>PATADA</small></button>
           <button class="touch-btn attack special" data-player="2" data-tap="special" type="button" aria-label="Poder especial"><span>★</span><small>PODER</small></button>
           <button class="touch-btn attack guard" data-player="2" data-hold="guard" type="button" aria-label="Cubrirse"><span>◆</span><small>CUBRIR</small></button>
+          <button id="evadeBtn2" class="touch-btn attack evade" data-player="2" data-tap="evade" type="button" aria-label="Evasión sin gastar energía"><span>↻</span><small id="evadeLabel2">RODAR</small></button>
           <button id="abilityBtn2" class="touch-btn attack teleport" data-player="2" data-tap="ability" type="button" aria-label="Habilidad propia" hidden><span id="abilityIcon2">☁</span><small id="abilityLabel2">HUMO</small></button>
         </div>
       </div>
@@ -217,10 +222,11 @@
         <span class="solo-help"><kbd>K</kbd> PATADA</span>
         <span class="solo-help"><kbd>L</kbd> PODER</span>
         <span class="solo-help"><kbd>I</kbd> CUBRIR</span>
+        <span class="solo-help"><kbd>O</kbd> EVADIR</span>
         <span class="solo-help" id="abilityHelp"><kbd>H</kbd> <span id="abilityKeyLabel">HUMO</span></span>
         <span class="solo-help"><kbd>ESPACIO</kbd> PAUSA</span>
 
-        <span class="versus-help">1P: WASD · J/K/L · I CUBRIR · H HABILIDAD</span><span class="versus-help">2P: FLECHAS · 7/8/9 · 0 CUBRIR · 6 HABILIDAD</span><span class="versus-help">ESPACIO: PAUSA</span>
+        <span class="versus-help">1P: WASD · J/K/L · I CUBRIR · H HABILIDAD · O EVADIR</span><span class="versus-help">2P: FLECHAS · 7/8/9 · 0 CUBRIR · 6 HABILIDAD · 5 EVADIR</span><span class="versus-help">ESPACIO: PAUSA</span>
       </div>
     </section>
 
@@ -233,6 +239,6 @@
     <div class="scanlines" aria-hidden="true"></div>
   </main>
 
-  <script src="game.js?v=20260906j"></script>
+  <script src="game.js?v=20260906k"></script>
 </body>
 </html>

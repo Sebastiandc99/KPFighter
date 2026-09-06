@@ -113,3 +113,19 @@ Con L (1P), 9 (2P) o PODER en celular lanza su bigote por 35 de energía. Sale f
 El sonido de boomerang es un efecto procedural de aire giratorio (assets/boomerang.wav), con una voz independiente por lanzamiento. Comienza al ejecutar el poder, se pausa con la pelea y termina al recuperar el bigote. El ranking compartido admite victorias de Facu.
 
 El atlas conserva las caras afeitadas y el motor compone el bigote como una pieza independiente antes de mezclar poses. El fondo de exportación se elimina al cargar cada cuadro, sin modificar las siluetas. Imágenes generadas a partir de la referencia de Facu: atlas de 12 posturas, rostro sin bigote, ropa negra y dirección derecha; retrato con bigote prominente y fondo azul.
+
+## Flor y barras finas
+
+Flor es petiza y esbelta, con uniforme de hockey y palo presente en las doce poses. Seleccionable en ambos modos, incluyendo espejo. L / 9 / PODER lanza una bocha recta (35 de energía, 13 de daño; bloqueo frontal reduce a 1). El sonido de palo comienza al ejecutar el poder, conserva un transitorio audible a corta distancia y respeta pausa, impacto, borde y fin de round. Sus victorias se guardan en el ranking global.
+
+Barras de vida reducidas a un tercio del grosor anterior, conservando su longitud. Barra de poder de 3–5 px. Se mantiene el daño reducido de golpes básicos.
+
+Arte generado con la herramienta integrada: assets/flor-atlas-v1.png y assets/flor-portrait-v1.png. Brief: Flor de la referencia, baja y esbelta, rubia, camiseta negra con franja blanca, shorts verdes, medias rayadas, palo en todas las poses; atlas de 12 poses y retrato arcade. El render recorta siluetas completas y elimina el fondo del atlas sin modificar el PNG original. Sonido assets/hockey-hit.wav sintetizado como golpe seco de palo.
+
+## Evasión libre y torneo individual
+
+- Evasión sin energía: **O** para 1P, **5** o numpad 5 para 2P, botón **RODAR** en celular. Avanza atravesando al rival; desde un borde busca el centro. Dura 0,5 s, con protección durante el giro y recuperación vulnerable. Puede repetirse al terminar; no usa enfriamiento de poderes. En el aire o durante un golpe recibido/ataque espera a volver a una postura disponible.
+- Blotta evade con **HUMO**, gratis y sin enfriamiento de poder. También conserva H / 6 como atajo. La Tunki conserva APLASTAR como poder separado.
+- Individual: torneo de cinco rivales distintos (todos excepto el elegido), orden aleatorio sin repetición, cada pelea al mejor de tres. Tras dos rounds ganados avanza automáticamente. Dificultad FÁCIL → NORMAL → MEDIA → DIFÍCIL → EXPERTO, con mejores tiempos de reacción, defensa, movimiento y decisiones.
+- Puntaje acumulado: golpes, defensa y bonos de round multiplicados por 1 / 1,25 / 1,5 / 1,75 / 2 según rival. Cada victoria agrega 2.000 × número de rival además del bono normal de pelea; al completar todos se agregan 10.000, sujetos al multiplicador del nivel. El marcador muestra rival, dificultad y multiplicador.
+- GAME OVER y registro al terminar el torneo o perder una pelea. Se guarda el puntaje del jugador humano incluso al perder, para valorar cuánto avanzó; luego se muestra automáticamente el ranking global. Dos jugadores conserva una única pelea al mejor de tres y registra al ganador.
