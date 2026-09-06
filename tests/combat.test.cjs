@@ -700,10 +700,10 @@ test("all four fighters uppercut with down+punch on keyboard and touch, launch o
       assert.equal(g.run("cpu.health"), 100);
       assert.equal(g.run("poseFor(player)"), 12);
       g.tick(.08);
-      assert.equal(g.run("cpu.health"), 91);
+      assert.equal(g.run("cpu.health"), 95);
       assert.ok(g.run("cpu.vy < 0 && !cpu.grounded"));
       g.tick(.8);
-      assert.equal(g.run("cpu.health"), 91);
+      assert.equal(g.run("cpu.health"), 95);
       assert.equal(g.run("player.action"), "idle");
       assert.equal(g.run("poseFor(player)"), 8);
     }
@@ -940,7 +940,7 @@ test('CPU uses a low kick against standing guard and a longer kick outside punch
   const h=game();
   h.run('Math.random=()=>.2; player.x=300; cpu.x=405; aiClock=0; updateAI(STEP)');
   assert.equal(h.run('cpu.action'),'kick');
-  assert.equal(h.run('cpu.health'),100); assert.equal(h.run('MOVES.kick.damage'),8);
+  assert.equal(h.run('cpu.health'),100); assert.equal(h.run('MOVES.kick.damage'),4);
 });
 
 

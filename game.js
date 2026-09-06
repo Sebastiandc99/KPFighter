@@ -84,10 +84,10 @@ const ROUND_AUDIO = {
   3: { src: "assets/final-round.mp3", title: "FINAL ROUND", timing: { voice: .35, title: .520, fight: 2.304, end: 3.00 }, buffer: null, loading: null }
 };
 const MOVES = {
-  punch: { startup: .085, active: .095, recovery: .18, reach: 77, damage: 6, knock: 160 },
-  kick: { startup: .12, active: .16, recovery: .23, reach: 106, damage: 8, knock: 235 },
-  uppercut: { startup: .105, active: .17, recovery: .26, reach: 76, damage: 9, knock: 145, lift: -420 },
-  lowKick: { startup: .13, active: .14, recovery: .22, reach: 102, damage: 7, knock: 210 },
+  punch: { startup: .085, active: .095, recovery: .18, reach: 77, damage: 3, knock: 160 },
+  kick: { startup: .12, active: .16, recovery: .23, reach: 106, damage: 4, knock: 235 },
+  uppercut: { startup: .105, active: .17, recovery: .26, reach: 76, damage: 5, knock: 145, lift: -420 },
+  lowKick: { startup: .13, active: .14, recovery: .22, reach: 102, damage: 4, knock: 210 },
   special: { startup: .19, active: .04, recovery: .29 },
   teleport: { startup: .16, active: .28, recovery: .23 },
   slam: { startup: .12, active: 1.55, recovery: .33, damage: 18, knock: 290 }

@@ -101,4 +101,4 @@ La grabación nueva de selección se sirve como assets/seleccion-v2.mp3 y se rep
 
 Las barras de vida son aproximadamente el doble de gruesas, con espacio para el puntaje y los controles. La CPU decide cada 110–250 ms, detecta proyectiles desde un poco más lejos, se defiende con mayor frecuencia y elige mejor el alcance de los ataques. Puede usar patadas bajas contra una guardia de pie; sigue teniendo probabilidades de equivocarse. Solo cambia el rival automático del modo individual.
 
-Daño normal: puño/panzazo 6, patada baja 7, patada 8 y gancho 9. Los poderes dañinos quitan más vida: carne 10, botella 12, energía/rayo 13, flores 14 y aplastamiento 18. Este balance se aplica a ambos jugadores y a la CPU.
+Daño normal: puño/panzazo 3, patada baja 4, patada 4 y gancho 5. Los poderes dañinos quitan más vida: carne 10, botella 12, energía/rayo 13, flores 14 y aplastamiento 18. Este balance se aplica a ambos jugadores y a la CPU.
