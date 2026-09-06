@@ -1059,3 +1059,28 @@ test('a defeated solo player can record accumulated progress and automatically s
  g.nodes.get('winnerName').value='Seba';await g.run('saveWinner({preventDefault(){}})');
  assert.equal(posted.character,'facu');assert.equal(posted.score,g.run('match.scores[0]'));assert.equal(g.run('state'),'ranking');
 });
+
+test('jump kick aims down in both directions, hits a lower rival once and misses above',()=>{
+ for(const direction of [1,-1]){
+  const g=game();g.run(`startGame('flor','sergio');state='playing';player.x=480;player.facing=${direction};cpu.x=480+${direction}*65;player.y=FLOOR-85;player.grounded=false;player.vy=0`);
+  g.key('KeyK');assert.equal(g.run('player.kickStyle'),'airKick');g.run('player.actionTime=player.actionDuration-.15');
+  assert.equal(g.run('poseFor(player)'),13);assert.ok(g.run('attackContact(player,cpu)?.overhead'));
+  g.run('cpu.y=FLOOR-260');assert.equal(g.run('attackContact(player,cpu)'),null);
+  g.run('cpu.y=FLOOR');g.tick(.14);assert.equal(g.run('cpu.health'),96);g.tick(.5);assert.equal(g.run('cpu.health'),96);
+ }
+});
+test('back plus kick creates a grounded spinning volley relative to facing for both players',()=>{
+ for(const direction of [1,-1]){
+  const g=game();g.run(`gameMode='versus';startGame('facu','flor');state='playing';player.x=480;player.facing=${direction};cpu.x=480+${direction}*80;cpu.facing=${-direction}`);
+  g.key(direction===1?'KeyA':'KeyD');g.key('KeyK');assert.equal(g.run('player.kickStyle'),'volley');assert.equal(g.run('player.grounded'),true);
+  g.key(direction===1?'ArrowRight':'ArrowLeft');g.key('Digit8');assert.equal(g.run('cpu.kickStyle'),'volley');assert.equal(g.run('cpu.grounded'),true);
+  g.run('player.actionTime=player.actionDuration-.2');assert.equal(g.run('poseFor(player)'),14);assert.equal(g.run('player.moveSpec.damage'),4);
+ }
+});
+test('air kick takes precedence over back, low kicks stay low, and touch supports both new kicks',()=>{
+ const g=game();g.run('startGame("sergio","blotta");state="playing"');
+ const e={pointerId:11,preventDefault(){}};g.holds[0].listeners.pointerdown(e);g.taps[0].listeners.pointerdown({...e,pointerId:12});g.taps[2].listeners.pointerdown({...e,pointerId:13});
+ assert.equal(g.run('player.kickStyle'),'airKick');g.key('Space');const before=g.run('JSON.stringify([player.x,player.y,player.actionTime])');g.tick(.5);assert.equal(g.run('JSON.stringify([player.x,player.y,player.actionTime])'),before);
+ g.key('Space');g.tick(1.5);g.holds[0].listeners.pointerdown(e);g.taps[2].listeners.pointerdown({...e,pointerId:14});assert.equal(g.run('player.kickStyle'),'volley');
+ g.tick(.8);g.holds[2].listeners.pointerdown({...e,pointerId:15});g.taps[2].listeners.pointerdown({...e,pointerId:16});assert.equal(g.run('player.lowAttack'),true);assert.equal(g.run('player.kickStyle'),null);
+});

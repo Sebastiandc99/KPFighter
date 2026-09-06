@@ -131,3 +131,11 @@ Arte generado con la herramienta integrada: assets/flor-atlas-v1.png y assets/fl
 - GAME OVER y registro al terminar el torneo o perder una pelea. Se guarda el puntaje del jugador humano incluso al perder, para valorar cuánto avanzó; luego se muestra automáticamente el ranking global. Dos jugadores conserva una única pelea al mejor de tres y registra al ganador.
 
 Ajuste de dificultad inicial: el primer rival toma decisiones cada 0,38–0,63 s, actúa con mayor frecuencia, se mueve más rápido y defiende/usa poderes más que antes. Los cinco niveles aumentan gradualmente en todas esas capacidades; el nivel experto conserva su exigencia.
+
+## Patadas aéreas y volea
+
+Saltar + patada usa una pose con pierna diagonal hacia abajo y una zona de golpe inclinada: alcanza rivales por debajo, no por encima; se bloquea de pie. Atrás + patada, desde el suelo y sin agacharse, ejecuta una volea con giro. Atrás se interpreta respecto al rival, en ambos lados y para ambos jugadores. En el aire prevalece la patada diagonal; agachado se mantiene la patada baja. Ambas nuevas patadas hacen 4 de daño y usan el sonido general existente. Controles idénticos en teclado y multitouch.
+
+Se generaron dos atlases de poses con la herramienta integrada: assets/kicks-classic-a-v1.png y assets/kicks-classic-b-v1.png. Brief: patada aérea con pierna extendida diagonal hacia abajo y volea con torso girado, conservando las seis identidades y prendas; Flor siempre con palo y Facu sin bigote en la base, compuesto por el motor según el estado de su boomerang. El motor recorta las siluetas completas y conserva los originales.
+
+La dificultad inicial sube nuevamente: intervalo de decisión 0,30–0,50 s, mayor actividad y defensa. Los niveles siguientes mantienen una progresión creciente hasta experto.

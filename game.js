@@ -46,6 +46,8 @@ const stageRoster = Object.keys(stages);
 const stageImages = Object.fromEntries(stageRoster.map(key => [key, loadImage(stages[key].src)]));
 
 const assets = {
+  kicksA: loadImage("assets/kicks-classic-a-v1.png"),
+  kicksB: loadImage("assets/kicks-classic-b-v1.png"),
   flor: loadImage("assets/flor-atlas-v1.png"),
   facu: loadImage("assets/facu-atlas-v1.png"),
   uppercuts: loadImage("assets/uppercuts-v1.png"),
@@ -92,6 +94,8 @@ const ROUND_AUDIO = {
 const MOVES = {
   punch: { startup: .085, active: .095, recovery: .18, reach: 77, damage: 3, knock: 160 },
   kick: { startup: .12, active: .16, recovery: .23, reach: 106, damage: 4, knock: 235 },
+  airKick: { startup: .10, active: .22, recovery: .18, reach: 105, damage: 4, knock: 200 },
+  volley: { startup: .18, active: .17, recovery: .28, reach: 118, damage: 4, knock: 250 },
   uppercut: { startup: .105, active: .17, recovery: .26, reach: 76, damage: 5, knock: 145, lift: -420 },
   lowKick: { startup: .13, active: .14, recovery: .22, reach: 102, damage: 4, knock: 210 },
   special: { startup: .19, active: .04, recovery: .29 },
@@ -279,7 +283,7 @@ function makeFighter(kind, x, isPlayer) {
     landingSquash: 0,
     attackLanded: false, invuln: 0, specialCooldown: 0,
     projectileToggle: 0, facing: x < 480 ? 1 : -1, flash: 0,
-    moveSpec: null, lowAttack: false, airAttack: false, moveIntent: 0, attackSound: null,
+    moveSpec: null, lowAttack: false, airAttack: false, kickStyle: null, moveIntent: 0, attackSound: null,
     walkPhase: 0, combo: 0, comboTime: 0, guardFlash: 0
   };
   const motion = fighterMotion(f);
@@ -353,10 +357,10 @@ function openStageSelection() {
 }
 
 const DIFFICULTIES = [
- {name:"NORMAL", reaction:.38, guard:.30, attack:.62, speed:.74, power:.17, tactics:.28},
- {name:"MEDIA", reaction:.29, guard:.42, attack:.73, speed:.79, power:.23, tactics:.40},
- {name:"AVANZADA", reaction:.22, guard:.54, attack:.81, speed:.84, power:.29, tactics:.52},
- {name:"DIFÍCIL", reaction:.16, guard:.66, attack:.90, speed:.89, power:.35, tactics:.64},
+ {name:"NORMAL", reaction:.30, guard:.39, attack:.72, speed:.80, power:.23, tactics:.37},
+ {name:"MEDIA", reaction:.24, guard:.48, attack:.79, speed:.84, power:.28, tactics:.47},
+ {name:"AVANZADA", reaction:.19, guard:.58, attack:.85, speed:.87, power:.33, tactics:.57},
+ {name:"DIFÍCIL", reaction:.14, guard:.68, attack:.92, speed:.91, power:.38, tactics:.67},
  {name:"EXPERTO", reaction:.10, guard:.78, attack:.98, speed:.95, power:.42, tactics:.76}
 ];
 function difficulty() { return DIFFICULTIES[campaign && gameMode==="solo" ? Math.min(campaign.index,4) : 3]; }
@@ -655,6 +659,9 @@ function integrateBody(f, dt) {
     f.vy = 0;
     f.grounded = true;
     if (!wasOnFloor) {
+      if(f.action==="kick" && f.kickStyle==="airKick"){
+        stopFighterSound(f);f.action="idle";f.actionTime=f.actionDuration=0;f.moveSpec=null;f.kickStyle=null;f.airAttack=false;
+      }
       f.landingSquash = .12;
       dustBurst(f.x, FLOOR, 7);
       addEffect("ground", f.x, FLOOR + 2, "#e4c38a", 44, .28);
@@ -746,6 +753,7 @@ function updateFighter(f, dt) {
       f.actionDuration = 0;
       f.moveSpec = null;
       f.lowAttack = f.airAttack = false;
+      f.kickStyle = null;
       setStance(f, humanFighter(f) ? fighterInput(f).down : f.crouchTime > 0, humanFighter(f) ? fighterInput(f).guard : f.guardTime > 0);
     }
   }
@@ -797,13 +805,14 @@ function attackContact(f, target) {
   const front = f.x + f.facing * spec.reach * FIGHTER_SCALE;
   const low = f.lowAttack;
   const rising = f.action === "uppercut";
-  const centerY = f.y - (rising ? lerp(93, 218, smoothstep((elapsed - spec.startup) / spec.active)) : low ? 34 : (f.action === "punch" ? (f.kind === "sergio" ? 88 : 145) : 120)) * FIGHTER_SCALE;
+  const diagonal=f.action==="kick" && f.kickStyle==="airKick";
+  const centerY = diagonal ? f.y-105*FIGHTER_SCALE+Math.min(spec.reach*FIGHTER_SCALE,Math.max(0,(target.x-f.x)*f.facing))*.85 : f.y - (rising ? lerp(93, 218, smoothstep((elapsed - spec.startup) / spec.active)) : low ? 34 : (f.action === "punch" ? (f.kind === "sergio" ? 88 : 145) : 120)) * FIGHTER_SCALE;
   const thickness = (rising ? 25 : f.action === "punch" ? 14 : 20) * FIGHTER_SCALE;
   const box = { left: Math.min(f.x, front), right: Math.max(f.x, front), top: centerY - thickness, bottom: centerY + thickness };
   if (!overlaps(box, hurtBox(target))) return null;
   return {
     attacker: f, target, damage: spec.damage + (f.kind === "sergio" && f.action === "punch" ? 2 : 0),
-    knock: spec.knock, lift: rising ? spec.lift : f.airAttack ? -120 : 0, direction: f.facing, low,
+    knock: spec.knock, lift: rising ? spec.lift : diagonal ? 0 : f.airAttack ? -120 : 0, direction: f.facing, low, overhead: diagonal,
     sourceX: f.x, projectile: false, x: (front + target.x) / 2, y: centerY
   };
 }
@@ -880,7 +889,9 @@ function attack(f, type) {
   const low = ["punch","kick"].includes(type) && f.grounded && (humanFighter(f) ? fighterInput(f).down : f.crouching) && !cost;
   if (low && type === "punch") type = "uppercut";
   stopFighterSound(f);
-  f.moveSpec = MOVES[low && type === "kick" ? "lowKick" : type];
+  const directionInput=humanFighter(f) ? Number(fighterInput(f).right)-Number(fighterInput(f).left) : f.moveIntent;
+  f.kickStyle=type!=="kick" || low ? null : !f.grounded ? "airKick" : directionInput*f.facing<0 ? "volley" : null;
+  f.moveSpec = MOVES[f.kickStyle || (low && type === "kick" ? "lowKick" : type)];
   f.action = type;
   f.actionDuration = f.moveSpec.startup + f.moveSpec.active + f.moveSpec.recovery;
   f.actionTime = f.actionDuration;
@@ -912,6 +923,8 @@ function attack(f, type) {
     f.specialStyle = f.kind === "flor" ? "hockey" : f.kind === "facu" ? "boomerang" : f.kind === "sergio" ? (f.projectileToggle++ % 2 ? "bottle" : "meat") : f.kind === "tunki" ? "flowers" : f.kind === "marechal" ? "lightning" : "ki";
     if (COMBAT_AUDIO[f.specialStyle]) f.attackSound = startCombatSound(f.specialStyle);
     f.vx = 0;
+  } else if (f.kickStyle === "volley") {
+    f.vx=-f.facing*65;
   } else if (type === "kick" && !low && f.grounded) {
     f.vy = -260;
     f.vx = f.facing * 260;
@@ -1376,6 +1389,8 @@ function poseFor(f) {
       return f.lowAttack ? 8 : !f.grounded ? 10 : POSES[f.kind].idle;
     }
   }
+  if(f.action==="kick" && f.kickStyle==="airKick")return progress<.12?10:13;
+  if(f.action==="kick" && f.kickStyle==="volley")return progress<.19?POSES[f.kind].idle:14;
   if (f.kind === "flor" && f.lowAttack && f.action === "kick") return POSES.flor.sweep;
   if (f.kind === "facu" && f.lowAttack && f.action === "kick") return POSES.facu.sweep;
   if (f.kind === "marechal" && f.lowAttack && f.action === "kick") return POSES.marechal.sweep;
@@ -1483,6 +1498,8 @@ function fighterMotion(f) {
     motion.rotation += f.facing * (.025 * windup - .06 * extension);
     motion.scaleX += .035 * extension;
     motion.scaleY -= .02 * extension;
+    if(f.kickStyle==="airKick") {motion.rotation=0;motion.dx=f.facing*4*extension;motion.dy=0;}
+    if(f.kickStyle==="volley") {motion.scaleX *= 1-.24*Math.sin(progress*Math.PI*2)**2;motion.rotation+=f.facing*.08*wave;}
   } else if (f.action === "special") {
     motion.dx += f.facing * (-4 * windup + 7 * extension);
     motion.rotation += f.facing * (.018 * windup - .022 * extension);
@@ -1579,7 +1596,7 @@ function drawMotionLines(f, motion) {
     ctx.restore();
     if (f.action === "kick") {
       ctx.save();
-      ctx.translate(f.x + motion.dx, f.y - (f.lowAttack ? 28 : 88) * FIGHTER_SCALE);
+      ctx.translate(f.x + motion.dx, f.y - (f.kickStyle==="airKick" ? 52 : f.lowAttack ? 28 : 88) * FIGHTER_SCALE);
       ctx.scale(f.facing, 1);
       ctx.globalAlpha = .5 * Math.sin(Math.PI * progress);
       ctx.strokeStyle = powerColor(f.kind);
@@ -1642,6 +1659,7 @@ function drawMotionLines(f, motion) {
 }
 
 function spriteFrame(frame) {
+  if(frame.pose===13 || frame.pose===14)return classicKickFrame(frame);
   if (frame.kind === "flor") return florSpriteFrame(frame);
   if (frame.kind === "facu") return facuSpriteFrame(frame);
   const key = frame.kind + ":" + frame.pose;
@@ -1698,6 +1716,35 @@ function blendedSprite(frame) {
 // The generated sheet has clean-shaven faces. The detachable piece is composited
 // into each pose before blending, so it follows crouches, hits and jumps exactly.
 // Full silhouettes include the hockey stick in every pose.
+const CLASSIC_KICK_FRAMES = {
+ facu: [[60,16,520,536,285,124],[662,13,563,562,850,114]],
+ flor: [[18,585,551,558],[600,586,627,616]],
+ sergio: [[61,15,397,339],[576,18,413,359]],
+ blotta: [[69,385,409,348],[568,389,418,381]],
+ tunki: [[50,747,435,369],[563,770,430,377]],
+ marechal: [[35,1126,451,374],[566,1148,430,383]]
+};
+function classicKickFrame(frame) {
+  const key="classic:"+frame.kind+":"+frame.pose+":"+!!frame.mustacheAway;
+  if(spriteFrames.has(key))return spriteFrames.get(key);
+  const second=["facu","flor"].includes(frame.kind),image=assets[second?"kicksB":"kicksA"];
+  if(!image.complete || !image.naturalWidth)return null;
+  const rect=CLASSIC_KICK_FRAMES[frame.kind][frame.pose-13], [x,y,w,h]=rect;
+  const surface=document.createElement("canvas");surface.width=surface.height=270;
+  const paint=surface.getContext("2d"),scale=frame.kind==="flor" ? .37 : second ? .40 : .57;
+  paint.imageSmoothingEnabled=false;
+  paint.drawImage(image,x,y,w,h,135-w*scale/2,260-h*scale,w*scale,h*scale);
+  clearSheetMatte(paint);
+  if(frame.kind==="facu" && !frame.mustacheAway){
+    const [mx,my]=rect.slice(4);drawMustache(paint,135+(mx-x-w/2)*scale,260+(my-y-h)*scale,22,0);
+  }
+  if(frame.kind==="blotta"){
+    const mirrored=document.createElement("canvas");mirrored.width=mirrored.height=270;
+    const brush=mirrored.getContext("2d");brush.translate(270,0);brush.scale(-1,1);brush.drawImage(surface,0,0);
+    spriteFrames.set(key,mirrored);return mirrored;
+  }
+  spriteFrames.set(key,surface);return surface;
+}
 const FLOR_FRAMES = [
  [32,16,300,339], [405,12,313,343], [725,5,379,350], [1112,31,286,324],
  [37,407,416,308], [450,405,304,309], [786,367,250,348], [1157,370,252,345],
@@ -1723,6 +1770,10 @@ const FACU_FRAMES = [
 ];
 function facuPose(pose) { return pose === 12 ? 11 : Math.min(10, pose); }
 function facuFace(pose) {
+  if(pose===13 || pose===14){
+    const [x,y,w,h,mx,my]=CLASSIC_KICK_FRAMES.facu[pose-13];
+    return {x:135+(mx-x-w/2)*.4,y:260+(my-y-h)*.4,angle:0};
+  }
   const [x,y,w,h,mx,my,angle] = FACU_FRAMES[facuPose(pose)];
   return {x:135+(mx-x-w/2)*.66, y:260+(my-y-h)*.66, angle};
 }
