@@ -919,3 +919,68 @@ button, .name-row strong, .choice-tile strong, .stage-card strong { font-weight:
 @media (max-height: 400px) {
   .ranking-scroll td, .ranking-scroll th { padding: 6px; }
 }
+
+/* Reference-style high scores: scenery and lettering, never colored table panels. */
+@font-face {
+  font-family: "KP Arcade Score";
+  src: url("assets/fonts/kp-arcade-score.woff") format("woff");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+.ranking-screen {
+  padding: 0;
+  background: #020511 url("assets/ranking-deck.png") center / cover no-repeat;
+}
+.ranking-screen.active { display: block; }
+.ranking-header { position: absolute; top: 10%; left: 0; width: 100%; }
+.ranking-header h2,
+.ranking-lettering {
+  font-family: "KP Arcade Score", "KP Pixel", serif;
+  font-weight: 400;
+  font-style: normal;
+  letter-spacing: 0;
+  color: #ffce22;
+  background: repeating-linear-gradient(0deg, #ffcb20 0 2px, #eb8f14 2px 3px);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+  filter: drop-shadow(1px 0 #ff8d08) drop-shadow(2px 3px #1222a6);
+}
+.ranking-header h2 { font-size: clamp(26px, 4.5cqw, 54px); line-height: 1.15; margin: 0; }
+.ranking-screen #rankingStatus {
+  position: absolute; left: 8%; right: 8%; bottom: 10%; margin: 0; text-align: center;
+  font: 400 clamp(12px, 1.7cqw, 20px)/1.2 var(--pixel-font);
+  color: #f3d991; text-shadow: 1px 2px #071137;
+}
+.ranking-scroll {
+  position: absolute; top: 28%; bottom: 16%; left: 25%; width: 58%;
+  border: 0; background: transparent; scrollbar-width: thin; scrollbar-color: #c69728 transparent;
+  outline-offset: 4px;
+}
+.ranking-scroll table { width: 100%; table-layout: fixed; background: transparent; border: 0; font-size: clamp(24px, 4.15cqw, 50px); }
+.ranking-scroll thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.ranking-scroll tbody tr { height: 10.8cqh; background: transparent; }
+.ranking-scroll td { padding: 0 1.2cqw 0 0; border: 0; background: transparent; vertical-align: middle; line-height: 1.15; text-align: left; }
+.ranking-scroll td:nth-child(1) { width: 25%; }
+.ranking-scroll td:nth-child(2) { width: 36%; text-align: center; text-transform: none; white-space: nowrap; }
+.ranking-scroll td:nth-child(3) { width: 39%; padding-left: 3cqw; padding-right: 0; text-align: left; text-transform: uppercase; overflow-wrap: anywhere; }
+.ranking-lettering { display: inline-block; }
+.ranking-scroll .long-name { font-size: .62em; }
+.ranking-scroll .new-record { background: transparent; color: inherit; }
+.ranking-scroll .new-record td:first-child::before { content: "▸"; position: absolute; margin-left: -.8em; color: #fff0a7; font: 400 1em var(--pixel-font); text-shadow: 2px 2px #1222a6; }
+.ranking-actions { position: absolute; bottom: 2%; left: 11%; right: 11%; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ranking-actions .arcade-btn,
+.ranking-actions .arcade-btn.primary {
+  min-height: 40px; padding: 5px 8px; margin: 0;
+  border: 0; border-radius: 0; background: transparent; box-shadow: none;
+  font: 400 clamp(16px, 2.2cqw, 26px)/1 var(--pixel-font);
+  letter-spacing: .02em; color: #ffda37; text-shadow: 2px 2px #1222a6;
+}
+.ranking-actions .arcade-btn:hover, .ranking-actions .arcade-btn:focus-visible { color: #fff8c2; background: transparent; text-decoration: underline; text-underline-offset: 5px; }
+@media (max-height: 400px) {
+  .ranking-screen { padding: 0; }
+  .ranking-actions { left: 6%; right: 6%; bottom: 1%; }
+  .ranking-screen #rankingStatus { bottom: 12%; }
+}

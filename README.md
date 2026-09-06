@@ -86,3 +86,12 @@ La pausa incluye Continuar y Salir al menú principal sin recargar. Congela relo
 **Musica seleccion de personajes** se repite durante ambas selecciones. Al iniciar una pelea se elige aleatoriamente **Sonido fighter 1** o **Sonido fighter 2**, en bucle hasta terminar el encuentro, incluidos los intervalos entre rounds. La música baja durante los anuncios y respeta pausa y silencio.
 
 **Flores tunki** acompaña el proyectil de La Tunki. Los sonidos de flores, rayo y carne comienzan al ejecutar el poder, antes de recorrer distancia. Al impactar se detienen; si el impacto fue prácticamente instantáneo se permite únicamente un transitorio mínimo de 80 ms para que resulte audible. Se omite el silencio inicial y cada voz tiene su propio ciclo de vida. Pausar o salir detiene también ese transitorio y los sonidos arcade sintetizados.
+
+
+## Ranking arcade y mezcla de audio
+
+El ranking usa un escenario de cubierta nocturna inspirado en la referencia, sin paneles ni celdas coloreadas. El título RANKING y las filas doradas pixeladas tienen sombra azul; el orden visual es puesto (1ST, 2ND...), puntaje sin separadores y nombre completo. Los registros siguen siendo globales y se puede desplazar todo el historial. Las opciones del pie son texto sin botones rellenos.
+
+La fuente KP Arcade Score, con remates y contornos de píxeles, se deriva de DejaVu Serif Bold; su licencia se incluye en assets/fonts. El script scripts/build-ranking-font.py permite regenerarla con Pillow y FontTools.
+
+La grabación nueva de selección se sirve como assets/seleccion-v2.mp3 y se repite durante ambas selecciones. La música de pelea bajó de 0,48 a 0,36; la selección de 0,55 a 0,42. Rayos, carne y flores subieron de 1 a 1,35; también se reforzaron los efectos sintetizados de energía y humo. Los golpes mantienen su volumen reducido y la sincronización permanece igual.

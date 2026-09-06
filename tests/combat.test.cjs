@@ -882,7 +882,7 @@ test('score rewards actual damage, survives rounds and registers the second play
   assert.equal(posted.name,'Seba 2'); assert.equal(posted.score,g.run('match.scores[1]'));
   assert.equal(posted.character,g.run('cpu.kind')); assert.equal(g.run('state'),'ranking');
   assert.equal(g.nodes.get('rankingRows').children.length,2);
-  assert.equal(g.nodes.get('rankingRows').children[0].children[1].textContent,'Seba 2');
+  assert.equal(g.nodes.get('rankingRows').children[0].children[2].children[0].textContent,'Seba 2');
 });
 
 test('failed ranking save preserves name and can retry once without duplicated submission', async () => {
@@ -917,4 +917,18 @@ test('selection music loops through stages and fight music survives rounds, paus
   g.run('audioCtx.currentTime=40; togglePause()'); assert.equal(g.run('combatLog.at(-1).offset'),4);
   const fight=g.run('musicSource'); g.run('finishRound(player,"K.O.")'); assert.equal(g.run('musicSource'),fight);
   g.run('state="playing"; finishRound(player,"K.O.")'); assert.equal(g.run('musicSource'),null);
+});
+
+
+test('ranking uses arcade positions and score-before-name without truncating names', async () => {
+  const g=game();
+  assert.equal(g.run('[1,2,3,4,11,12,13,21,22,23,111].map(rankingPosition).join(",")'),'1ST,2ND,3RD,4TH,11TH,12TH,13TH,21ST,22ND,23RD,111TH');
+  g.sandbox.fetch=async()=>({ok:true,json:async()=>({entries:[{id:'entry1',name:'Sebastián completo',score:50000,createdAt:1}],next:null})});
+  await g.run('showRanking()');
+  const cells=g.nodes.get('rankingRows').children[0].children;
+  assert.equal(cells.length,3);
+  assert.equal(cells[0].children[0].textContent,'1ST');
+  assert.equal(cells[1].children[0].textContent,'50000');
+  assert.equal(cells[2].children[0].textContent,'Sebastián completo');
+  assert.ok(cells[2].classList.contains('long-name'));
 });

@@ -97,15 +97,15 @@ const COMBAT_AUDIO = {
   // Skip measured leading silence so even a close-range jab is audible.
   general: { src: "assets/golpe-general.mp3", volume: .32, start: .18, end: .59 },
   belly: { src: "assets/panzazo-sergio.mp3", volume: .36, start: .035 },
-  lightning: { src: "assets/poder-rayo.mp3", volume: 1, start: .035, end: 1.69 },
-  meat: { src: "assets/poder-sergio-carne.mp3", volume: 1, start: 0 },
-  flowers: { src: "assets/flores-tunki.mp3", volume: 1, start: .025, end: 2.42 }
+  lightning: { src: "assets/poder-rayo.mp3", volume: 1.35, start: .035, end: 1.69 },
+  meat: { src: "assets/poder-sergio-carne.mp3", volume: 1.35, start: 0 },
+  flowers: { src: "assets/flores-tunki.mp3", volume: 1.35, start: .025, end: 2.42 }
 };
 // Each attack/projectile owns its own voice; removing one never stops another.
 const combatSounds = new Set();
 const EXTRA_AUDIO = {
   music: [{src: "assets/fighter-1.mp3", usage: "fight"}, {src: "assets/fighter-2.mp3", usage: "fight"}],
-  selection: {src: "assets/seleccion.mp3", usage: "selection"}
+  selection: {src: "assets/seleccion-v2.mp3", usage: "selection"}
 };
 const soundTails = new Set();
 let musicTrack = null;
@@ -1014,6 +1014,12 @@ function showGameOver() {
   }
 }
 
+function rankingPosition(position) {
+  const lastTwo = position % 100;
+  const suffix = lastTwo >= 11 && lastTwo <= 13 ? "TH" : ({1:"ST", 2:"ND", 3:"RD"}[position % 10] || "TH");
+  return position + suffix;
+}
+
 const RANKING_API = "https://kp-fighter-ranking.sebastiandc99.chatgpt.site/api/ranking";
 let rankingRequest = 0;
 
@@ -1078,12 +1084,16 @@ async function showRanking(highlight = null) {
     for (const [index,entry] of sorted.entries()) {
       const row = document.createElement("tr");
       if (entry.id === highlight) row.classList.add("new-record");
-      for (const value of [index + 1, entry.name, entry.score.toLocaleString("es-AR"), entry.mode === "versus" ? "2P" : "1P"]) {
-        const cell = document.createElement("td"); cell.textContent = String(value); row.appendChild(cell);
+      for (const [column,value] of [rankingPosition(index + 1), String(entry.score), entry.name].entries()) {
+        const cell = document.createElement("td");
+        const lettering = document.createElement("span"); lettering.classList.add("ranking-lettering");
+        lettering.textContent = String(value); cell.appendChild(lettering);
+        if (column === 2 && entry.name.length > 9) cell.classList.add("long-name");
+        row.appendChild(cell);
       }
       rows.appendChild(row);
     }
-    status.textContent = sorted.length ? sorted.length + " resultados · mayor a menor · ranking compartido" : "Todavía no hay resultados. ¡El primero puede ser tuyo!";
+    status.textContent = sorted.length ? sorted.length + " RESULTADOS · DESLIZÁ PARA VER TODOS" : "Todavía no hay resultados. ¡El primero puede ser tuyo!";
   } catch (_) {
     if (state !== "ranking" || requestId !== rankingRequest) return;
     status.textContent = "No se pudo cargar el ranking. Revisá la conexión y reintentá.";
@@ -1980,13 +1990,13 @@ function loadMusic(track) {
 function syncMusic() {
   const allowed = musicTrack?.usage === "selection" ? ["select", "stage"] : ["intro", "playing", "roundOver"];
   if (!allowed.includes(state) || muted || !audioCtx || audioCtx.state !== "running" || !musicTrack?.buffer) return;
-  if (musicGain) musicGain.gain.value = state === "intro" ? .22 : musicTrack.usage === "selection" ? .55 : .48;
+  if (musicGain) musicGain.gain.value = state === "intro" ? .18 : musicTrack.usage === "selection" ? .42 : .36;
   if (musicSource) return;
   musicSource = audioCtx.createBufferSource();
   musicGain = audioCtx.createGain();
   musicSource.buffer = musicTrack.buffer;
   musicSource.loop = true;
-  musicGain.gain.value = state === "intro" ? .22 : musicTrack.usage === "selection" ? .55 : .48;
+  musicGain.gain.value = state === "intro" ? .18 : musicTrack.usage === "selection" ? .42 : .36;
   musicSource.connect(musicGain).connect(audioCtx.destination);
   musicSource.start(0, musicElapsed % musicTrack.buffer.duration);
   musicStartedAt = audioCtx.currentTime || 0;
@@ -2067,9 +2077,9 @@ function sfx(name) {
     punch: () => tone(95, .08, "sawtooth", .018, -40),
     kick: () => tone(130, .12, "sawtooth", .02, -80),
     hit: () => { tone(62, .13, "square", .03, -22); tone(145, .05, "sawtooth", .015, -80); },
-    special: () => { tone(220, .23, "sawtooth", .065, 380); later(() => tone(540, .12, "square", .045, -100), 80); },
+    special: () => { tone(220, .23, "sawtooth", .085, 380); later(() => tone(540, .12, "square", .06, -100), 80); },
     lightning: () => { tone(960, .16, "sawtooth", .038, -720); tone(140, .2, "square", .026, 510); },
-    teleport: () => { tone(400, .23, "sine", .06, -330); tone(95, .36, "triangle", .045, 620); },
+    teleport: () => { tone(400, .23, "sine", .08, -330); tone(95, .36, "triangle", .06, 620); },
     slam: () => { tone(88, .22, "triangle", .075, -60); tone(48, .14, "sawtooth", .045, -20); },
     block: () => tone(720, .07, "triangle", .025, -370),
     empty: () => tone(70, .08, "square", .025),
