@@ -1103,3 +1103,20 @@ test('KO is absent on time or draws and final-round knockout still plays it',()=
  for(const reason of ['TIEMPO','K.O.']){const g=game();enableCombatAudio(g);g.run('KO_AUDIO.buffer={name:"ko",duration:1.56}');g.run(reason==='TIEMPO'?'finishRound(player,"TIEMPO")':'finishRound(null,"K.O.")');assert.equal(g.run('koVoice'),null);}
  const g=game();enableCombatAudio(g);g.run('KO_AUDIO.buffer={name:"ko",duration:1.56};match.playerWins=1;finishRound(player,"K.O.")');assert.equal(g.run('state'),'finished');assert.ok(g.run('koVoice.source'));g.tick(1.3);assert.equal(g.run('koVoice'),null);
 });
+
+test('KO waits for decoding and then starts at the beginning of the voice',()=>{
+ const g=game();enableCombatAudio(g);g.run('finishRound(player,"K.O.")');g.tick(.5);
+ assert.equal(g.run('koVoice.elapsed'),0);
+ g.run('KO_AUDIO.buffer={name:"ko",duration:1.56};syncKOAudio()');
+ assert.equal(g.run('combatLog.find(e=>e.name==="ko"&&e.event==="start").offset'),.179);
+ g.tick(1.3);assert.equal(g.run('koVoice'),null);
+});
+
+test('embedded KO matches the supplied recording and failed decoding can retry',async()=>{
+ const g=game();enableCombatAudio(g);
+ assert.deepEqual(Buffer.from(g.run('KO_AUDIO_BASE64'),'base64'),fs.readFileSync(path.join(__dirname,'../assets/ko.mp3')));
+ g.run('var attempts=0;var atob=()=>"abc";audioCtx.decodeAudioData=()=>{attempts++;return attempts===1?Promise.reject(Error("decode failed")):Promise.resolve({name:"ko",duration:1.56})};loadKOAudio()');
+ await g.run('KO_AUDIO.loading');assert.equal(g.run('KO_AUDIO.loading'),null);
+ g.run('loadKOAudio()');await g.run('KO_AUDIO.loading');
+ assert.equal(g.run('attempts'),2);assert.equal(g.run('KO_AUDIO.buffer.name'),'ko');
+});
