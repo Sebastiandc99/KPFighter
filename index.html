@@ -8,7 +8,7 @@
   <title>KP FIGHTER</title>
   <link rel="preload" href="assets/fonts/Bangers-Regular.woff" as="font" type="font/woff" crossorigin>
   <link rel="preload" href="assets/fonts/VT323-Regular.woff" as="font" type="font/woff" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260907b">
+  <link rel="stylesheet" href="style.css?v=20260907c">
 </head>
 <body>
   <main id="arcade" class="arcade" aria-label="KP Fighter">
@@ -62,7 +62,7 @@
       </div>
       <div class="portrait portrait-flor" data-portrait="flor" aria-hidden="true"><img src="assets/flor-portrait-v1.png" alt=""><span>FLOR</span></div>
       <div class="portrait portrait-facu" data-portrait="facu" aria-hidden="true"><img src="assets/facu-portrait-v1.png" alt=""><span>FACU</span></div>
-      <div class="portrait portrait-galante" data-portrait="galante" aria-hidden="true"><img src="assets/galante-portrait-v2.webp" alt=""></div>
+      <div class="portrait portrait-galante" data-portrait="galante" aria-hidden="true"><img src="assets/galante-portrait-v3.webp" alt=""></div>
       <div class="selection-info" aria-live="polite">
         <p id="selectionPrompt" class="selection-kicker">JUGADOR 1 · ELIGE TU LUCHADOR</p>
         <h3 id="selectionName">SERGIO</h3>
@@ -94,12 +94,13 @@
           </button>
           <button class="choice-tile" type="button" data-pick="facu" aria-label="Elegir a Facu"><span class="p1-arrow" aria-hidden="true">▼<small>1P</small></span><img src="assets/facu-portrait-v1.png" alt="Facu"><strong>FACU</strong></button>
           <button class="choice-tile" type="button" data-pick="flor" aria-label="Elegir a Flor"><span class="p1-arrow" aria-hidden="true">▼<small>1P</small></span><img src="assets/flor-portrait-v1.png" alt="Flor"><strong>FLOR</strong></button>
-          <button class="choice-tile" type="button" data-pick="galante" aria-label="Elegir a Galante"><span class="p1-arrow" aria-hidden="true">▼<small>1P</small></span><img src="assets/galante-portrait-v2.webp" alt="Galante"><strong>GALANTE</strong></button>
+          <button class="choice-tile" type="button" data-pick="galante" aria-label="Elegir a Galante"><span class="p1-arrow" aria-hidden="true">▼<small>1P</small></span><img src="assets/galante-portrait-v3.webp" alt="Galante"><strong>GALANTE</strong></button>
+          <button class="choice-tile random-choice" type="button" data-pick="random" aria-label="Elegir personaje aleatorio"><span class="random-symbol" aria-hidden="true">?</span><strong>AL AZAR</strong></button>
         </div>
         <button id="confirmBtn" class="confirm-btn" type="button">ELEGIR ESCENARIO</button>
       </div>
 
-      <button id="fighterBackBtn" class="arcade-btn fighter-back" type="button">VOLVER</button><p class="select-help">← → ELEGIR · ENTER CONFIRMAR</p>
+      <button id="fighterBackBtn" class="arcade-btn fighter-back" type="button">VOLVER</button><p class="select-help">← ↑ ↓ → ELEGIR · ENTER CONFIRMAR</p>
     </section>
 
     <section id="stageScreen" class="screen stage-screen" aria-labelledby="stageTitle">
@@ -123,7 +124,7 @@
           <img src="assets/stage-mine.webp" alt="Galería subterránea iluminada"><strong>GALERÍA SUBTERRÁNEA</strong>
         </button>
         <button type="button" class="stage-card" data-stage="newmont" aria-pressed="false">
-          <img src="assets/stage-newmont.webp" alt="Planta minera de Newmont"><strong>PLANTA NEWMONT</strong>
+          <img src="assets/stage-plant-v2.webp" alt="Planta minera"><strong>PLANTA MINERA</strong>
         </button>
       </div>
       <div class="stage-actions">
@@ -167,7 +168,7 @@
           <p id="pauseHelp">ESPACIO PARA CONTINUAR</p>
         </div>
       </div>
-      <div id="speechBubble" class="speech-bubble" hidden>¡Te voy a echar!</div>
+      <div id="speechBubble" class="speech-bubble" hidden></div>
       <div id="flash" class="hit-flash" aria-hidden="true"></div>
 
       <div id="resultPanel" class="result-panel" hidden>
@@ -241,6 +242,6 @@
     <div class="scanlines" aria-hidden="true"></div>
   </main>
 
-  <script src="game.js?v=20260907b"></script>
+  <script src="game.js?v=20260907c"></script>
 </body>
 </html>

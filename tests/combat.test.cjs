@@ -496,7 +496,7 @@ test("stage selection follows the fighter screen and supports keyboard, touch an
   assert.equal(g.run("playerChoice"), "marechal");
   g.nodes.get("confirmBtn").listeners.click();
   g.nodes.get("stage-newmont").listeners.click();
-  assert.equal(g.nodes.get("stagePreview").src, "assets/stage-newmont.webp");
+  assert.equal(g.nodes.get("stagePreview").src, "assets/stage-plant-v2.webp");
   g.nodes.get("stageConfirmBtn").listeners.click();
   assert.equal(g.run("state"), "intro");
   assert.equal(g.run("player.kind"), "marechal");
@@ -1176,4 +1176,12 @@ test('Galante touch smoke is free, crosses the rival, pauses, and retains standa
  g.taps[5].listeners.pointerdown({pointerId:81,preventDefault(){}});assert.equal(g.run('player.action'),'teleport');assert.equal(g.run('player.power'),0);
  g.tick(.2);g.key('Space');const x=g.run('player.x');g.tick(.3);assert.equal(g.run('player.x'),x);g.key('Space');g.tick(.55);assert.ok(g.run('player.x>cpu.x'));
  g.key('KeyJ');assert.equal(g.run('player.action'),'punch');g.tick(.5);g.key('KeyK');assert.equal(g.run('player.action'),'kick');
+});
+
+test('selection supports vertical grid navigation and random choice for either player',()=>{
+ const g=game();g.run('startMode("versus");chooseFighter("sergio",false)');
+ g.key('ArrowDown');assert.equal(g.run('playerChoice'),'facu');g.key('ArrowUp');assert.equal(g.run('playerChoice'),'sergio');
+ g.run('Math.random=()=>.99;chooseFighter("random",false)');assert.equal(g.run('playerChoice'),'galante');g.run('confirmFighter();Math.random=()=>0;chooseFighter("random",false)');assert.equal(g.run('opponentChoice'),'sergio');
+ assert.equal(g.run('stats.galante.height'),g.run('stats.sergio.height'));assert.equal(g.run('stats.galante.size'),g.run('stats.sergio.size'));
+ g.run('startGame("blotta","sergio");beginIntro()');assert.equal(g.nodes.get('speechBubble').hidden,true);
 });

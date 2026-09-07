@@ -46,13 +46,13 @@ const ui = {
 const stages = {
   arcade: { name: "PATIO ARCADE", src: "assets/arena.jpg", description: "El escenario original de KP FIGHTER." },
   mine: { name: "GALERÍA SUBTERRÁNEA", src: "assets/stage-mine.webp", description: "Roca, luces cálidas y combate bajo tierra." },
-  newmont: { name: "PLANTA NEWMONT", src: "assets/stage-newmont.webp", description: "La planta minera, a cielo abierto." }
+  newmont: { name: "PLANTA MINERA", src: "assets/stage-plant-v2.webp", description: "La planta minera, a cielo abierto." }
 };
 const stageRoster = Object.keys(stages);
 const stageImages = Object.fromEntries(stageRoster.map(key => [key, loadImage(stages[key].src)]));
 
 const assets = {
-  galante: loadImage("assets/galante-atlas-v2.webp"),
+  galante: loadImage("assets/galante-atlas-v3.webp"),
   kicksA: loadImage("assets/kicks-classic-a-v1.png"),
   kicksB: loadImage("assets/kicks-classic-b-v1.png"),
   flor: loadImage("assets/flor-atlas-v1.png"),
@@ -80,7 +80,7 @@ const POSES = {
 };
 
 const stats = {
-  galante: { name: "GALANTE", speed: 242, jump: 595, defaultFace: 1, size: 210, height: 178, width: 34, description: "LÁTIGO CON PINCHES · EVASIÓN DE HUMO", ability: null },
+  galante: { name: "GALANTE", speed: 242, jump: 595, defaultFace: 1, size: 210, height: 184, width: 34, description: "LÁTIGO CON PINCHES · EVASIÓN DE HUMO", ability: null },
   flor: { name: "FLOR", speed: 280, jump: 610, defaultFace: 1, size: 199, height: 165, width: 23, description: "BOCHA DE HOCKEY", ability: null },
   facu: { name: "FACU", speed: 276, jump: 615, defaultFace: 1, size: 222, height: 188, width: 25, description: "BIGOTE BOOMERANG", ability: null },
   sergio: { name: "SERGIO", speed: 260, jump: 595, defaultFace: 1, size: 210, height: 184, width: 32, description: "PANZAZO · ASADO · FERNET", ability: null },
@@ -119,7 +119,7 @@ const KO_AUDIO_BASE64 = "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAA
 let koVoice = null;
 
 const COMBAT_AUDIO = {
-  whip: {src: "assets/whip.wav", volume: 1.15, start: 0, end: .52},
+  whip: {src: "assets/whip-v2.wav", volume: 1.35, start: 0, end: .52},
   hockey: {src: "assets/hockey-hit.wav", volume: 1.35, start: 0, end: .8},
   boomerang: {src: "assets/boomerang.wav", volume: 1.1, start: 0, end: 1},
   // Skip measured leading silence so even a close-range jab is audible.
@@ -314,6 +314,7 @@ function showScreen(screen) {
 }
 
 function chooseFighter(kind, playSound = true) {
+  if(kind === "random") kind=roster[Math.floor(Math.random()*roster.length)];
   if (!stats[kind]) return;
   if (selectionPlayer === 2) opponentChoice = kind;
   else playerChoice = kind;
@@ -464,7 +465,7 @@ function startRound() {
 
 function beginIntro() {
   introElapsed = 0;
-  ui.speech.hidden = match.round !== 1 || match.repeat || !fighters.some(f => f.kind === "blotta");
+  ui.speech.hidden = true;
   positionSpeech();
   ui.announcement.classList.remove("show");
   announcementTime = 0;
@@ -2518,10 +2519,11 @@ window.addEventListener("keydown", event => {
     return;
   }
   if (state === "select") {
-    if (["KeyA", "KeyD", "ArrowLeft", "ArrowRight"].includes(code)) {
-      const direction = code === "KeyA" || code === "ArrowLeft" ? -1 : 1;
+    const offsets={KeyA:-1,ArrowLeft:-1,KeyD:1,ArrowRight:1,KeyW:-4,ArrowUp:-4,KeyS:4,ArrowDown:4};
+    if (code in offsets) {
       const selected = selectionPlayer === 2 ? opponentChoice : playerChoice;
-      chooseFighter(roster[(roster.indexOf(selected) + direction + roster.length) % roster.length]);
+      const choices=[...roster,"random"];
+      chooseFighter(choices[(roster.indexOf(selected)+offsets[code]+choices.length)%choices.length]);
     }
     if (["Enter", "Space", "KeyJ", "Numpad1"].includes(code)) confirmFighter();
     if (code === "Escape") backFromFighters();
@@ -2631,17 +2633,39 @@ function drawGalanteProps(f,frame,opacity) {
     ctx.restore();return;
   }
   const active=f.action==='special',progress=actionProgress(f);
-  const startX=x+frame.motion.dx+f.facing*(active?90:39)*FIGHTER_SCALE,startY=y+frame.motion.dy-(active?125:123)*FIGHTER_SCALE;
-  const extension=active?Math.sin(Math.min(1,progress/.42)*Math.PI/2)*(progress>.65?Math.max(0,(1-progress)/.35):1):0;
-  const endX=startX+f.facing*(active?extension*(MAX_FIGHTER_DISTANCE+45):15);
-  const endY=active?startY:y-12;
-  ctx.lineWidth=5;ctx.strokeStyle='#1b171b';ctx.beginPath();ctx.moveTo(startX,startY);
-  ctx.quadraticCurveTo((startX+endX)/2,startY+(active?Math.sin(progress*20)*26:50),endX,endY);ctx.stroke();
-  for(let i=0;i<=32;i++){
-    const t=i/32,px=startX+(endX-startX)*t,py=startY+(endY-startY)*t+Math.sin(t*Math.PI)*(active?Math.sin(progress*20)*13:14);
-    ctx.fillStyle=i%2?'#d5bf9c':'#766357';ctx.fillRect(px-2,py-2,4,4);
-  }
-  ctx.fillStyle='#37343b';ctx.fillRect(endX-8,endY-7,16,14);ctx.fillStyle='#d8dce1';
-  for(const side of [-1,1]){ctx.beginPath();ctx.moveTo(endX-5,endY+side*5);ctx.lineTo(endX,endY+side*16);ctx.lineTo(endX+4,endY+side*5);ctx.fill();}
+  const origin={x:x+frame.motion.dx,y:y+frame.motion.dy};
+  const hand={x:origin.x+f.facing*(active?95:39)*FIGHTER_SCALE,y:origin.y-(active?145:123)*FIGHTER_SCALE};
+  const extension=active?Math.sin(Math.min(1,progress/.38)*Math.PI/2)*(progress>.65?Math.max(0,(1-progress)/.35):1):0;
+  const tip={x:hand.x+f.facing*(active?extension*(MAX_FIGHTER_DISTANCE+30):23),y:active?origin.y-105*FIGHTER_SCALE:origin.y-14};
+  drawWhipStrand(hand,tip,active?Math.sin(progress*17)*(1-extension*.6)*55:25,active);
+  // The second barbed end hangs behind the fist instead of being a detached club.
+  drawWhipStrand(hand,{x:hand.x-f.facing*(active?42:56),y:origin.y-22},active?22:31,false);
   ctx.restore();
+}
+
+function drawWhipStrand(start,end,bend,extended) {
+  const dx=end.x-start.x,dy=end.y-start.y,length=Math.hypot(dx,dy);
+  const count=Math.max(12,Math.ceil(length/7));
+  const points=Array.from({length:count+1},(_,i)=>{const t=i/count;return {x:start.x+dx*t,y:start.y+dy*t+Math.sin(t*Math.PI)*bend};});
+  ctx.lineCap='round';ctx.lineJoin='round';
+  for(const [color,width] of [['#15151b',6],['#786b59',3.6],['#c0af8c',1.2]]){
+    ctx.strokeStyle=color;ctx.lineWidth=width;ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();
+  }
+  for(let i=1;i<points.length;i++){
+    const p=points[i],prev=points[i-1],angle=Math.atan2(p.y-prev.y,p.x-prev.x);
+    ctx.save();ctx.translate(p.x,p.y);ctx.rotate(angle);
+    ctx.strokeStyle=i%2?'#29272a':'#b9afa0';ctx.lineWidth=1.3;ctx.beginPath();ctx.ellipse(0,0,3,1.7,0,0,Math.PI*2);ctx.stroke();
+    if(i%7===0 && i>3)drawWhipSpike(extended?7:5);
+    ctx.restore();
+  }
+  const prev=points[points.length-2];ctx.save();ctx.translate(end.x,end.y);ctx.rotate(Math.atan2(end.y-prev.y,end.x-prev.x));
+  ctx.fillStyle='#282831';ctx.fillRect(-11,-5,21,10);ctx.fillStyle='#a8a6aa';ctx.fillRect(-9,-4,3,8);ctx.fillRect(4,-4,3,8);
+  drawWhipSpike(13);ctx.beginPath();ctx.moveTo(9,-4);ctx.lineTo(24,0);ctx.lineTo(9,4);ctx.closePath();ctx.fillStyle='#dce1e8';ctx.fill();ctx.restore();
+}
+
+function drawWhipSpike(size) {
+  for(const side of [-1,1]){
+    ctx.beginPath();ctx.moveTo(-4,0);ctx.lineTo(1,side*size);ctx.lineTo(5,0);ctx.closePath();ctx.fillStyle='#cdd1da';ctx.fill();ctx.strokeStyle='#353640';ctx.lineWidth=1;ctx.stroke();
+    ctx.beginPath();ctx.moveTo(1,side*size);ctx.lineTo(1,0);ctx.lineTo(5,0);ctx.closePath();ctx.fillStyle='#707683';ctx.fill();
+  }
 }

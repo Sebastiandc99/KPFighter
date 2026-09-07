@@ -154,3 +154,11 @@ Audio KO: grabación del usuario convertida a MP3 para compatibilidad. Comienza 
 Sprites ilustrados con sombreado arcade para los 16 cuadros de combate, movimiento y entrada. Selección con el cuerpo completo recortado y fondo transparente, sin el póster, estadísticas ni carteles.
 
 Arte generado con la herramienta de imágenes integrada. Brief: conservar cara, casco blanco, anteojos, barba, panza, uniforme Newmont amarillo y azul con reflectivos; igualar el detalle del sprite de Sergio; producir poses separadas sin textos ni escenario. Las hojas originales se normalizan con `scripts/build-galante-assets.cjs` (requiere Sharp), que convierte el fondo de croma en transparencia y organiza las poses en celdas de 270 px.
+
+### Ajustes de escenario, selección y Galante — 2026-09-07
+
+- Tercer escenario renombrado a Planta minera, con el logo retirado de la fachada.
+- Eliminada la frase de entrada de Blotta.
+- Selección simétrica en dos filas de cuatro: siete luchadores y elección al azar. Flechas verticales y horizontales disponibles.
+- Galante basado en la nueva referencia caricaturesca, con la altura y escala de Sergio, uniforme sin marcas, látigo continuo de dos puntas con pinches y nuevo sonido de barrido, chasquido y cola metálica.
+- Arte generado con la herramienta integrada; las poses se normalizan con `scripts/build-galante-assets.cjs SOURCE_SHEET`. Audio reproducible con `python3 scripts/build-whip-audio.py`.
