@@ -1210,3 +1210,14 @@ test('Padrino bark retains an audible close-hit tail and stops on pause',()=>{
  assert.equal(g.run('cpu.health'),87);assert.equal(g.run('soundTails.size'),1);g.key('Space');assert.equal(g.run('soundTails.size'),0);
  assert.ok(fs.statSync(path.join(__dirname,'../assets/padrino-bark-v1.wav')).size>10000);
 });
+
+test('title music loops only on title and mode, stays continuous, and switches on fighter selection',()=>{
+ const g=game();enableCombatAudio(g);
+ g.run(`EXTRA_AUDIO.title.buffer={name:'title',duration:26};EXTRA_AUDIO.selection.buffer={name:'selection',duration:20};mainMenu()`);
+ assert.equal(g.run('state'),'title');assert.equal(g.run('musicTrack.usage'),'title');assert.equal(g.run('musicSource.loop'),true);
+ const title=g.run('musicSource');g.run('openModeSelection()');assert.equal(g.run('state'),'mode');assert.equal(g.run('musicSource'),title);
+ g.run('chooseMode("versus")');assert.equal(g.run('musicSource'),title);
+ g.run('startMode("versus")');assert.equal(g.run('musicTrack.usage'),'selection');assert.notEqual(g.run('musicSource'),title);
+ assert.ok(g.run('combatLog.some(e=>e.event==="stop"&&e.source===combatLog.find(e=>e.name==="title"&&e.event==="start").source)'));
+ g.run('mainMenu()');assert.equal(g.run('musicTrack.usage'),'title');g.run('stopMusic();state="playing";musicTrack=EXTRA_AUDIO.title;syncMusic()');assert.equal(g.run('musicSource'),null);
+});

@@ -137,6 +137,7 @@ const COMBAT_AUDIO = {
 // Each attack/projectile owns its own voice; removing one never stops another.
 const combatSounds = new Set();
 const EXTRA_AUDIO = {
+  title: {src: "assets/title-menu-v1.mp3", usage: "title"},
   music: [{src: "assets/fighter-1.mp3", usage: "fight"}, {src: "assets/fighter-2.mp3", usage: "fight"}],
   selection: {src: "assets/seleccion-v2.mp3", usage: "selection"}
 };
@@ -238,13 +239,14 @@ function fighterInput(f) { return f === cpu ? held2 : held; }
 function fighterLabel(f) { return (f === player ? "1P" : gameMode === "versus" ? "2P" : "CPU") + " · " + stats[f.kind].name; }
 
 function mainMenu() {
-  stopRoundVoice(); stopAllCombatSounds(); stopMusic();
+  stopRoundVoice(); stopAllCombatSounds();
   clearHeld();
   campaign = null;
   fighters = []; player = cpu = null;
   projectiles = []; particles = []; afterimages = []; effects = [];
   hitStop = screenShake = accumulator = 0;
   state = "title";
+  selectMusic("title");
   ui.resultPanel.hidden = true;
   document.getElementById("winnerForm").hidden = true;
   setPauseUI(false);
@@ -491,7 +493,7 @@ function positionSpeech() {
 }
 
 function update(dt) {
-  if (["select", "stage", "intro", "playing", "roundOver"].includes(state)) advanceMusic(dt);
+  if (["title", "mode", "select", "stage", "intro", "playing", "roundOver"].includes(state)) advanceMusic(dt);
   if (!["intro", "playing", "roundOver", "finished"].includes(state)) return;
   fighters.forEach(f => {
     f.prevX = f.x; f.prevY = f.y;
@@ -2201,7 +2203,7 @@ function ensureAudio() {
   const Audio = window.AudioContext || window.webkitAudioContext;
   if (!Audio) return;
   if (!audioCtx) audioCtx = new Audio();
-  if (audioCtx.state === "suspended") audioCtx.resume().then(() => syncKOAudio()).catch(() => {});
+  if (audioCtx.state === "suspended") audioCtx.resume().then(() => { syncKOAudio(); syncMusic(); }).catch(() => {});
   loadKOAudio();
   [1, 2, 3].forEach(loadRoundVoice);
   Object.keys(COMBAT_AUDIO).forEach(loadCombatAudio);
@@ -2336,9 +2338,9 @@ function loadRoundVoice(round = match.round) {
 }
 
 function selectMusic(usage = "fight") {
-  if (usage === "selection" && musicTrack?.usage === usage) { syncMusic(); return; }
+  if (["title", "selection"].includes(usage) && musicTrack?.usage === usage) { syncMusic(); return; }
   stopMusic();
-  musicTrack = usage === "selection" ? EXTRA_AUDIO.selection : EXTRA_AUDIO.music[Math.floor(Math.random() * EXTRA_AUDIO.music.length)];
+  musicTrack = usage === "title" ? EXTRA_AUDIO.title : usage === "selection" ? EXTRA_AUDIO.selection : EXTRA_AUDIO.music[Math.floor(Math.random() * EXTRA_AUDIO.music.length)];
   ensureAudio();
   syncMusic();
 }
@@ -2352,7 +2354,7 @@ function loadMusic(track) {
 }
 
 function syncMusic() {
-  const allowed = musicTrack?.usage === "selection" ? ["select", "stage"] : ["intro", "playing", "roundOver"];
+  const allowed = musicTrack?.usage === "title" ? ["title", "mode"] : musicTrack?.usage === "selection" ? ["select", "stage"] : ["intro", "playing", "roundOver"];
   if (!allowed.includes(state) || muted || !audioCtx || audioCtx.state !== "running" || !musicTrack?.buffer) return;
   if (musicGain) musicGain.gain.value = state === "intro" ? .18 : musicTrack.usage === "selection" ? .42 : .36;
   if (musicSource) return;
@@ -2511,6 +2513,7 @@ function performAction(action, slot = 1) {
   else attack(f, action);
 }
 window.addEventListener("keydown", event => {
+  if (["title", "mode"].includes(state)) ensureAudio();
   // Name entry and native buttons keep their own keyboard behavior.
   if (event.target?.tagName === "INPUT" || event.target?.tagName === "TEXTAREA" || state === "ranking") return;
   const code = event.code || (event.key === " " ? "Space" : event.key.length === 1 ? "Key" + event.key.toUpperCase() : event.key);
@@ -2594,6 +2597,7 @@ document.querySelectorAll("[data-tap]").forEach(btn => {
 });
 
 document.addEventListener("pointerdown", event => {
+  if (["title", "mode"].includes(state)) ensureAudio();
   if (event.pointerType === "touch") {
     document.body.classList.add("touch-device");
     syncViewport();
@@ -2609,6 +2613,7 @@ window.addEventListener("orientationchange", syncViewport);
 document.addEventListener("fullscreenchange", syncViewport);
 syncViewport();
 if (window.location?.search && new URLSearchParams(window.location.search).has("ranking")) showRanking();
+else selectMusic("title");
 requestAnimationFrame(loop);
 
 // Generated 4x4 atlases share normalized cells for attacks and movement.
