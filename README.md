@@ -175,3 +175,9 @@ Rostro de El Padrino v2: herramienta integrada de edición de imágenes, usando 
 Música inicial: `assets/title-menu-v1.mp3`, convertida del archivo suministrado `videoplayback (3).m4a`. Se reproduce en bucle exclusivamente en portada y elección de modo, sin reiniciarse entre ambas. Al elegir personajes se reemplaza por su música habitual. Si el navegador bloquea autoplay, se activa con el primer clic, toque o tecla.
 
 Corrección de música de selección: conserva la pista original `seleccion-v2.mp3` en personajes y escenarios. Las descargas/decodificaciones fallidas se liberan y reintentan con una espera de dos segundos; una carga tardía nunca reemplaza la pista de otra pantalla.
+
+### Paula
+Noveno personaje seleccionable para ambos jugadores y rival del torneo. Controles estándar, incluida rodada normal. Hydro Blast carga en las manos y extiende un chorro azul/blanco hasta el rival: daño único de 13, coste 35, bloqueable y evadible con salto o rodada. El agua viaja en ambas direcciones, con salpicaduras al impactar y pausa sincronizada.
+Audio extraído del archivo MP4 suministrado: desde 1.90 s, duración 1.20 s, fundidos breves y volumen de poder. Conserva un mínimo audible de 0.4 s en impactos cercanos.
+Arte generado con la herramienta integrada y las dos referencias del usuario: «Paula alta y delgada, pelo negro largo, camisa blanca abierta con detalles azules, camiseta negra, pantalón azul, cinturón de herramientas y botas; atlas arcade 4×4 con 16 poses completas, fondo magenta, sin textos ni escenario; agua dibujada por el motor». Recursos: `assets/paula-atlas-v1.webp`, `assets/paula-portrait-v1.webp`, `assets/paula-water-v1.mp3`. Normalización: `node scripts/build-paula-assets.cjs SOURCE_SHEET`.
+La selección usa una cuadrícula 3×3; flechas arriba/abajo avanzan una fila. Torneo de ocho rivales con dificultad progresiva.

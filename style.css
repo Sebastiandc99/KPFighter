@@ -1015,11 +1015,11 @@ button, .name-row strong, .choice-tile strong, .stage-card strong { font-weight:
 .portrait-galante img { object-fit: contain; object-position: center bottom; filter: drop-shadow(4px 6px 2px rgba(0,0,0,.5)); }
 .choice-tile[data-pick="galante"] img { object-fit: contain; object-position: center; background: #142341; }
 
-/* Symmetric eight-slot roster: eight fighters. */
+/* Symmetric nine-fighter roster. */
 .select-screen .choice-dock, .phone-portrait .select-screen .choice-dock {
-  left: 72%; top: 40%; bottom: auto; width: 40%;
+  left: 72%; top: 35%; bottom: auto; width: 34%;
 }
-.choice-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: clamp(5px, 1cqw, 13px); width: 100%; }
+.choice-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(5px, 1cqw, 13px); width: 100%; }
 .select-screen .choice-tile, .phone-portrait .select-screen .choice-tile { width: 100%; min-width: 0; }
 .choice-tile.selected { transform: none; }
 .select-screen .confirm-btn { margin-top: 5%; font-size: clamp(10px, 1.7cqw, 22px); }
@@ -1031,3 +1031,8 @@ button, .name-row strong, .choice-tile strong, .stage-card strong { font-weight:
 .choice-tile[data-pick="padrino"] img { object-fit: contain; object-position: center; background: #142341; }
 .random-select-btn { display: block; margin: 2% auto 0; padding: .4em 1em; border: 1px solid #f5ce61; background: #142341; color: #ffdc58; font: inherit; font-size: clamp(9px, 1.2cqw, 16px); cursor: pointer; }
 .random-select-btn:focus-visible { outline: 3px solid white; outline-offset: 3px; }
+
+.select-screen .choice-tile img { aspect-ratio: 1.35; }
+.portrait-paula { left: 7%; border: 0; background: transparent; box-shadow: none; }
+.portrait-paula img { object-fit: contain; object-position: center bottom; filter: drop-shadow(4px 6px 2px rgba(0,0,0,.5)); }
+.choice-tile[data-pick="paula"] img { object-fit: contain; object-position: center; background: #142341; }

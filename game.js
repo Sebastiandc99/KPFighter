@@ -52,6 +52,7 @@ const stageRoster = Object.keys(stages);
 const stageImages = Object.fromEntries(stageRoster.map(key => [key, loadImage(stages[key].src)]));
 
 const assets = {
+  paula: loadImage("assets/paula-atlas-v1.webp"),
   padrino: loadImage("assets/padrino-atlas-v2.webp"),
   dachshund: loadImage("assets/padrino-dog-v1.webp"),
   galante: loadImage("assets/galante-atlas-v3.webp"),
@@ -72,6 +73,7 @@ const assets = {
 };
 
 const POSES = {
+  paula: {idle:0, punch:1, kick:2, hit:3, power:4, sweep:5},
   padrino: {idle:0, punch:1, kick:2, hit:3, power:4, sweep:5},
   galante: {idle:0, punch:1, kick:2, hit:3, power:4, sweep:5},
   flor: {idle:0, punch:1, kick:2, hit:3, power:4, sweep:5},
@@ -83,6 +85,7 @@ const POSES = {
 };
 
 const stats = {
+  paula: { name: "PAULA", speed: 275, jump: 620, defaultFace: 1, size: 220, height: 194, width: 24, description: "HYDRO BLAST · CHORRO DE AGUA", ability: null },
   padrino: { name: "EL PADRINO", speed: 263, jump: 605, defaultFace: 1, size: 210, height: 184, width: 27, description: "PERROS SALCHICHA · RODADA", ability: null },
   galante: { name: "GALANTE", speed: 242, jump: 595, defaultFace: 1, size: 210, height: 184, width: 34, description: "LÁTIGO CON PINCHES · EVASIÓN DE HUMO", ability: null },
   flor: { name: "FLOR", speed: 280, jump: 610, defaultFace: 1, size: 199, height: 165, width: 23, description: "BOCHA DE HOCKEY", ability: null },
@@ -93,7 +96,7 @@ const stats = {
   marechal: { name: "MARECHAL", speed: 270, jump: 620, defaultFace: 1, size: 242, height: 202, width: 23, description: "ARTES MARCIALES · RAYOS", ability: null }
 };
 
-const roster = ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante", "padrino"];
+const roster = ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante", "padrino", "paula"];
 const FLOOR = 448;
 const STEP = 1 / 120;
 const JUMP_BOOST = 1.25;
@@ -123,6 +126,7 @@ const KO_AUDIO_BASE64 = "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAA
 let koVoice = null;
 
 const COMBAT_AUDIO = {
+  water: {src: "assets/paula-water-v1.mp3", volume: 1.2, start: 0, end: 1.2},
   dog: {src: "assets/padrino-bark-v1.wav", volume: 1.15, start: 0, end: .58},
   whip: {src: "assets/whip-v2.wav", volume: 1.35, start: 0, end: .52},
   hockey: {src: "assets/hockey-hit.wav", volume: 1.35, start: 0, end: .8},
@@ -387,7 +391,8 @@ const DIFFICULTIES = [
  {name:"DIFÍCIL", reaction:.12, guard:.73, attack:.96, speed:.96, power:.42, tactics:.75},
  {name:"EXPERTO", reaction:.09, guard:.81, attack:.99, speed:.99, power:.46, tactics:.82},
  {name:"MAESTRO", reaction:.08, guard:.84, attack:1, speed:1, power:.49, tactics:.87},
- {name:"LEYENDA", reaction:.07, guard:.86, attack:1, speed:1, power:.51, tactics:.89}
+ {name:"LEYENDA", reaction:.07, guard:.86, attack:1, speed:1, power:.51, tactics:.89},
+ {name:"ÉLITE", reaction:.06, guard:.88, attack:1, speed:1, power:.53, tactics:.91}
 ];
 function difficulty() { return DIFFICULTIES[campaign && gameMode==="solo" ? Math.min(campaign.index,DIFFICULTIES.length-1) : 3]; }
 function beginGame() {
@@ -940,7 +945,7 @@ function attack(f, type) {
   stopFighterSound(f);
   const directionInput=humanFighter(f) ? Number(fighterInput(f).right)-Number(fighterInput(f).left) : f.moveIntent;
   f.kickStyle=type!=="kick" || low ? null : !f.grounded ? "airKick" : directionInput*f.facing<0 ? "volley" : null;
-  f.moveSpec = MOVES[f.kickStyle || (low && type === "kick" ? "lowKick" : type)];
+  f.moveSpec = f.kind === "paula" && type === "special" ? {...MOVES.special, startup:.24, active:.06, recovery:.70} : MOVES[f.kickStyle || (low && type === "kick" ? "lowKick" : type)];
   f.action = type;
   f.actionDuration = f.moveSpec.startup + f.moveSpec.active + f.moveSpec.recovery;
   f.actionTime = f.actionDuration;
@@ -969,7 +974,7 @@ function attack(f, type) {
     f.vx = f.vy = 0;
   } else if (type === "special") {
     f.specialSpawned = false;
-    f.specialStyle = f.kind === "padrino" ? "dog" : f.kind === "galante" ? "whip" : f.kind === "flor" ? "hockey" : f.kind === "facu" ? "boomerang" : f.kind === "sergio" ? (f.projectileToggle++ % 2 ? "bottle" : "meat") : f.kind === "tunki" ? "flowers" : f.kind === "marechal" ? "lightning" : "ki";
+    f.specialStyle = f.kind === "paula" ? "water" : f.kind === "padrino" ? "dog" : f.kind === "galante" ? "whip" : f.kind === "flor" ? "hockey" : f.kind === "facu" ? "boomerang" : f.kind === "sergio" ? (f.projectileToggle++ % 2 ? "bottle" : "meat") : f.kind === "tunki" ? "flowers" : f.kind === "marechal" ? "lightning" : "ki";
     if (COMBAT_AUDIO[f.specialStyle]) f.attackSound = startCombatSound(f.specialStyle);
     f.vx = 0;
   } else if (f.kickStyle === "volley") {
@@ -991,7 +996,7 @@ function attack(f, type) {
 function spawnProjectile(owner, style) {
   if (style === "whip") { strikeWhip(owner); return; }
   if (style === "boomerang") { spawnBoomerang(owner); return; }
-  const config = style === "dog" ? { speed: 500, damage: 13, radius: 23 } : style === "hockey" ? { speed: 570, damage: 13, radius: 12 } : style === "ki" ? { speed: 470, damage: 13, radius: 16 } :
+  const config = style === "water" ? { speed: 760, damage: 13, radius: 24 } : style === "dog" ? { speed: 500, damage: 13, radius: 23 } : style === "hockey" ? { speed: 570, damage: 13, radius: 12 } : style === "ki" ? { speed: 470, damage: 13, radius: 16 } :
     style === "lightning" ? { speed: 560, damage: 13, radius: 15 } :
     style === "flowers" ? { speed: 405, damage: 14, radius: 20 } :
     style === "bottle" ? { speed: 425, damage: 12, radius: 16 } : { speed: 395, damage: 10, radius: 19 };
@@ -1004,7 +1009,7 @@ function spawnProjectile(owner, style) {
   projectiles.push({
     sound,
     owner, style, x, y, prevX: x, prevY: y, prevSpin: 0,
-    vx: owner.facing * config.speed, vy: style === "dog" || style === "ki" || style === "lightning" || style === "hockey" ? 0 : -42,
+    vx: owner.facing * config.speed, vy: style === "water" || style === "dog" || style === "ki" || style === "lightning" || style === "hockey" ? 0 : -42,
     damage: config.damage, radius: config.radius * FIGHTER_SCALE, life: 2.5, spin: 0, trailTime: 0, trail: []
   });
 }
@@ -1016,7 +1021,7 @@ function updateProjectiles(dt) {
     p.life -= dt;
     p.x += p.vx * dt;
     p.spin += dt * 8;
-    if (p.style !== "dog" && p.style !== "ki" && p.style !== "lightning" && p.style !== "hockey") { p.vy += 82 * dt; p.y += p.vy * dt; }
+    if (p.style !== "water" && p.style !== "dog" && p.style !== "ki" && p.style !== "lightning" && p.style !== "hockey") { p.vy += 82 * dt; p.y += p.vy * dt; }
     p.trailTime -= dt;
     if (p.trailTime <= 0) {
       p.trail.unshift({ x: p.x, y: p.y });
@@ -1037,6 +1042,7 @@ function updateProjectiles(dt) {
       stopCombatSound(p.sound);
       hit(target, p.damage, Math.sign(p.vx) * 180, 0, p.owner,
         { direction: Math.sign(p.vx), sourceX: p.x - Math.sign(p.vx) * p.radius, projectile: true, low: false, x: p.x, y: p.y });
+      if (p.style === "water") { burst(p.x, p.y, "#96ecff", 24); addEffect("ring", p.x, p.y, "#e5fbff", 55, .25); }
       if (p.style === "flowers") burst(p.x, p.y, "#ff72bb", 15);
       if (p.style === "lightning") burst(p.x, p.y, "#a8edff", 14);
       projectiles.splice(i, 1);
@@ -1333,7 +1339,7 @@ function updateParticles(dt) {
 }
 
 function powerColor(kind) {
-  return { padrino: "#ff902e", galante: "#ffdb43", flor: "#d7ff99", facu: "#ffe47a", sergio: "#ffc650", blotta: "#76daff", tunki: "#ff8bd5", marechal: "#a5eaff" }[kind];
+  return { paula: "#60d9ff", padrino: "#ff902e", galante: "#ffdb43", flor: "#d7ff99", facu: "#ffe47a", sergio: "#ffc650", blotta: "#76daff", tunki: "#ff8bd5", marechal: "#a5eaff" }[kind];
 }
 
 function addEffect(type, x, y, color, radius, life) {
@@ -1435,6 +1441,10 @@ function poseFor(f) {
   if(f.kind === "galante" && state === "intro" && introElapsed < ROUND_AUDIO[match.round].timing.fight) return 15;
   if(f.action==="roll")return 8;
   const progress = actionProgress(f);
+  if (f.kind === "paula" && f.action === "special") {
+    const elapsed=f.actionDuration-f.actionTime;
+    return elapsed<f.moveSpec.startup?11:elapsed<.86?4:15;
+  }
   if (f.action === "hit") return POSES[f.kind].hit;
   if (f.action === "uppercut") {
     const elapsed = f.actionDuration - f.actionTime;
@@ -1455,6 +1465,7 @@ function poseFor(f) {
   if (f.kind === "flor" && f.lowAttack && f.action === "kick") return POSES.flor.sweep;
   if (f.kind === "facu" && f.lowAttack && f.action === "kick") return POSES.facu.sweep;
   if (f.kind === "marechal" && f.lowAttack && f.action === "kick") return POSES.marechal.sweep;
+  if (f.kind === "paula" && f.lowAttack && f.action === "kick") return POSES.paula.sweep;
   if (f.kind === "padrino" && f.lowAttack && f.action === "kick") return POSES.padrino.sweep;
   if (f.kind === "galante" && f.lowAttack) return POSES.galante.sweep;
   if (f.lowAttack) return f.kind === "blotta" && f.action === "kick" ? POSES.blotta.sweep : 8;
@@ -1725,7 +1736,7 @@ function drawMotionLines(f, motion) {
 }
 
 function spriteFrame(frame) {
-  if(["galante", "padrino"].includes(frame.kind)) return atlasSpriteFrame(frame);
+  if(["galante", "padrino", "paula"].includes(frame.kind)) return atlasSpriteFrame(frame);
   if(frame.pose===13 || frame.pose===14)return classicKickFrame(frame);
   if (frame.kind === "flor") return florSpriteFrame(frame);
   if (frame.kind === "facu") return facuSpriteFrame(frame);
@@ -1959,6 +1970,7 @@ function drawFighter(f) {
   }
   drawSpriteFrame(frame, opacity);
   if(f.kind === "galante") drawGalanteProps(f, frame, opacity);
+  if(f.kind === "paula") drawWaterCharge(f);
   if (f.guarding || f.guardFlash > 0) {
     ctx.save();
     ctx.globalAlpha = .35 + f.guardFlash * 2;
@@ -1984,6 +1996,7 @@ function drawFighter(f) {
 }
 
 function drawProjectileTrail(p) {
+  if (p.style === "water") return;
   if (p.trail.length < 2) return;
   const x = lerp(p.prevX, p.x, renderAlpha);
   const y = lerp(p.prevY, p.y, renderAlpha);
@@ -2006,6 +2019,7 @@ function drawProjectileTrail(p) {
 }
 
 function drawProjectile(p) {
+  if (p.style === "water") { drawWaterJet(p); return; }
   ctx.save();
   ctx.translate(lerp(p.prevX, p.x, renderAlpha), lerp(p.prevY, p.y, renderAlpha));
   ctx.scale(FIGHTER_SCALE, FIGHTER_SCALE);
@@ -2268,7 +2282,7 @@ function disconnectCombatVoice(voice) {
 function stopCombatSound(voice, immediate = false) {
   if (!voice) return;
   combatSounds.delete(voice);
-  const minAudible = voice.name === "dog" ? .5 : ["lightning", "meat", "flowers", "boomerang", "hockey", "whip"].includes(voice.name) ? .08 : 0;
+  const minAudible = voice.name === "water" ? .4 : voice.name === "dog" ? .5 : ["lightning", "meat", "flowers", "boomerang", "hockey", "whip"].includes(voice.name) ? .08 : 0;
   const heard = voice.audibleAt === null ? 0 : Math.max(0, (audioCtx?.currentTime ?? voice.elapsed) - voice.audibleAt);
   if (!immediate && voice.source && minAudible > heard && !muted && state === "playing") {
     // At point-blank range retain only a short attack transient, never the whole clip.
@@ -2547,7 +2561,7 @@ window.addEventListener("keydown", event => {
     return;
   }
   if (state === "select") {
-    const offsets={KeyA:-1,ArrowLeft:-1,KeyD:1,ArrowRight:1,KeyW:-4,ArrowUp:-4,KeyS:4,ArrowDown:4};
+    const offsets={KeyA:-1,ArrowLeft:-1,KeyD:1,ArrowRight:1,KeyW:-3,ArrowUp:-3,KeyS:3,ArrowDown:3};
     if (code in offsets) {
       const selected = selectionPlayer === 2 ? opponentChoice : playerChoice;
       const choices=roster;
@@ -2698,4 +2712,38 @@ function drawWhipSpike(size) {
     ctx.beginPath();ctx.moveTo(-4,0);ctx.lineTo(1,side*size);ctx.lineTo(5,0);ctx.closePath();ctx.fillStyle='#cdd1da';ctx.fill();ctx.strokeStyle='#353640';ctx.lineWidth=1;ctx.stroke();
     ctx.beginPath();ctx.moveTo(1,side*size);ctx.lineTo(1,0);ctx.lineTo(5,0);ctx.closePath();ctx.fillStyle='#707683';ctx.fill();
   }
+}
+
+
+// The water front travels through the arena; braided streams connect it to the casting hands.
+function drawWaterJet(p) {
+  const direction=Math.sign(p.vx),frontX=lerp(p.prevX,p.x,renderAlpha),frontY=lerp(p.prevY,p.y,renderAlpha);
+  const handX=lerp(p.owner.prevX,p.owner.x,renderAlpha)+direction*58*FIGHTER_SCALE;
+  const handY=lerp(p.owner.prevY,p.owner.y,renderAlpha)-143*FIGHTER_SCALE;
+  const length=Math.max(0,(frontX-handX)*direction),steps=Math.max(8,Math.ceil(length/12));
+  ctx.save();ctx.lineCap="round";ctx.lineJoin="round";
+  for(const [width,color] of [[21,"rgba(15,115,239,.48)"],[10,"#188eea"],[4,"#b9f5ff"],[1.5,"#ffffff"]]){
+    ctx.lineWidth=width*FIGHTER_SCALE;
+    for(let strand=0;strand<3;strand++){
+      ctx.strokeStyle=color;ctx.beginPath();
+      for(let i=0;i<=steps;i++){
+        const t=i/steps,amplitude=Math.sin(Math.PI*t)*16+3;
+        const x=handX+direction*length*t,y=lerp(handY,frontY,t)+Math.sin(t*16-stageTime*23+strand*2.1)*amplitude;
+        if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+      }ctx.stroke();
+    }
+  }
+  ctx.fillStyle="#d7faff";
+  for(let i=0;i<13;i++){
+    const t=(i/13+stageTime*.8)%1;
+    ctx.beginPath();ctx.ellipse(handX+direction*length*t,lerp(handY,frontY,t)+Math.sin(i*4.7+stageTime*16)*29,3.5,1.8,direction*.5,0,Math.PI*2);ctx.fill();
+  }
+  ctx.strokeStyle="#f0fdff";ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(frontX,frontY,12,24,0,0,Math.PI*2);ctx.stroke();ctx.restore();
+}
+function drawWaterCharge(f) {
+  if(f.action!=="special" || f.specialSpawned)return;
+  const t=Math.min(1,(f.actionDuration-f.actionTime)/f.moveSpec.startup);
+  const x=lerp(f.prevX,f.x,renderAlpha)+f.facing*40*FIGHTER_SCALE,y=lerp(f.prevY,f.y,renderAlpha)-135*FIGHTER_SCALE;
+  ctx.save();ctx.strokeStyle="#8eeeff";ctx.lineWidth=2.5;ctx.shadowColor="#159fff";ctx.shadowBlur=10*drawingScale;
+  for(let i=0;i<3;i++){ctx.beginPath();ctx.arc(x,y,5+t*17+i*3,stageTime*16+i*2,stageTime*16+i*2+4.3);ctx.stroke();}ctx.restore();
 }
