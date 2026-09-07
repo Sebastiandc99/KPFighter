@@ -173,3 +173,5 @@ Arte generado con la herramienta de imágenes integrada. Brief: conservar cara, 
 Rostro de El Padrino v2: herramienta integrada de edición de imágenes, usando el recorte facial proporcionado como identidad. Instrucción: modificar exclusivamente las cabezas de las 15 poses, cara más frontal, ojos claros, rostro ancho y sonrisa fieles a la referencia; conservar cuerpos y cuadrícula. Recursos activos: `assets/padrino-atlas-v2.webp` y `assets/padrino-portrait-v2.webp`.
 
 Música inicial: `assets/title-menu-v1.mp3`, convertida del archivo suministrado `videoplayback (3).m4a`. Se reproduce en bucle exclusivamente en portada y elección de modo, sin reiniciarse entre ambas. Al elegir personajes se reemplaza por su música habitual. Si el navegador bloquea autoplay, se activa con el primer clic, toque o tecla.
+
+Corrección de música de selección: conserva la pista original `seleccion-v2.mp3` en personajes y escenarios. Las descargas/decodificaciones fallidas se liberan y reintentan con una espera de dos segundos; una carga tardía nunca reemplaza la pista de otra pantalla.

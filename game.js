@@ -139,7 +139,7 @@ const combatSounds = new Set();
 const EXTRA_AUDIO = {
   title: {src: "assets/title-menu-v1.mp3", usage: "title"},
   music: [{src: "assets/fighter-1.mp3", usage: "fight"}, {src: "assets/fighter-2.mp3", usage: "fight"}],
-  selection: {src: "assets/seleccion-v2.mp3", usage: "selection"}
+  selection: {src: "assets/seleccion-v2.mp3?v=20260907g", usage: "selection"}
 };
 const soundTails = new Set();
 let musicTrack = null;
@@ -372,6 +372,7 @@ function chooseStage(key, playSound = true) {
 
 function openStageSelection() {
   state = "stage";
+  selectMusic("selection");
   clearHeld();
   showScreen(ui.stageScreen);
   document.getElementById("stageFighter").textContent = stats[playerChoice].name + (gameMode === "versus" ? " VS " + stats[opponentChoice].name : " · TORNEO DE " + (roster.length-1) + " RIVALES");
@@ -2338,7 +2339,7 @@ function loadRoundVoice(round = match.round) {
 }
 
 function selectMusic(usage = "fight") {
-  if (["title", "selection"].includes(usage) && musicTrack?.usage === usage) { syncMusic(); return; }
+  if (["title", "selection"].includes(usage) && musicTrack?.usage === usage) { ensureAudio(); syncMusic(); return; }
   stopMusic();
   musicTrack = usage === "title" ? EXTRA_AUDIO.title : usage === "selection" ? EXTRA_AUDIO.selection : EXTRA_AUDIO.music[Math.floor(Math.random() * EXTRA_AUDIO.music.length)];
   ensureAudio();
@@ -2346,16 +2347,28 @@ function selectMusic(usage = "fight") {
 }
 
 function loadMusic(track) {
-  if (!audioCtx || track.buffer || track.loading || typeof fetch !== "function") return;
-  track.loading = fetch(track.src).then(response => {
+  if (!track || !audioCtx || track.buffer || track.loading || typeof fetch !== "function") return track?.loading;
+  if (performance.now() < (track.retryAt || 0)) return;
+  track.loading = Promise.resolve().then(() => fetch(track.src)).then(response => {
     if (!response.ok) throw new Error("Music unavailable");
     return response.arrayBuffer();
-  }).then(bytes => audioCtx.decodeAudioData(bytes)).then(buffer => { track.buffer = buffer; syncMusic(); }).catch(() => {});
+  }).then(bytes => audioCtx.decodeAudioData(bytes)).then(buffer => {
+    track.buffer = buffer;
+    track.retryAt = 0;
+  }).catch(() => {
+    // A failed preload must not permanently silence later selection screens.
+    track.retryAt = performance.now() + 2000;
+  }).finally(() => {
+    track.loading = null;
+    if (track.buffer && track === musicTrack) syncMusic();
+  });
+  return track.loading;
 }
 
 function syncMusic() {
   const allowed = musicTrack?.usage === "title" ? ["title", "mode"] : musicTrack?.usage === "selection" ? ["select", "stage"] : ["intro", "playing", "roundOver"];
-  if (!allowed.includes(state) || muted || !audioCtx || audioCtx.state !== "running" || !musicTrack?.buffer) return;
+  if (!allowed.includes(state) || muted || !audioCtx || audioCtx.state !== "running" || !musicTrack) return;
+  if (!musicTrack.buffer) { loadMusic(musicTrack); return; }
   if (musicGain) musicGain.gain.value = state === "intro" ? .18 : musicTrack.usage === "selection" ? .42 : .36;
   if (musicSource) return;
   musicSource = audioCtx.createBufferSource();

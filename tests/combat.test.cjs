@@ -1221,3 +1221,16 @@ test('title music loops only on title and mode, stays continuous, and switches o
  assert.ok(g.run('combatLog.some(e=>e.event==="stop"&&e.source===combatLog.find(e=>e.name==="title"&&e.event==="start").source)'));
  g.run('mainMenu()');assert.equal(g.run('musicTrack.usage'),'title');g.run('stopMusic();state="playing";musicTrack=EXTRA_AUDIO.title;syncMusic()');assert.equal(g.run('musicSource'),null);
 });
+
+test('failed selection preload retries and delayed decoding never replaces title music',async()=>{
+ const g=game();enableCombatAudio(g);
+ g.run('EXTRA_AUDIO.title.buffer={name:"title",duration:26};mainMenu();audioCtx.decodeAudioData=async()=>({name:"selection",duration:88})');
+ let requests=0;g.sandbox.fetch=async()=>{requests++;if(requests===1)throw Error('temporary network failure');return {ok:true,arrayBuffer:async()=>new ArrayBuffer(2)}};
+ await g.run('loadMusic(EXTRA_AUDIO.selection)');assert.equal(g.run('EXTRA_AUDIO.selection.loading'),null);
+ assert.equal(g.run('musicTrack.usage'),'title');g.run('syncMusic()');assert.equal(requests,1);
+ g.run('EXTRA_AUDIO.selection.retryAt=0;startMode("solo")');await g.run('EXTRA_AUDIO.selection.loading');
+ assert.equal(requests,2);assert.equal(g.run('musicSource.buffer.name'),'selection');
+ const selection=g.run('musicSource');g.run('openStageSelection()');assert.equal(g.run('musicSource'),selection);
+ g.run('mainMenu();EXTRA_AUDIO.selection.buffer=null;EXTRA_AUDIO.selection.retryAt=0');await g.run('loadMusic(EXTRA_AUDIO.selection)');
+ assert.equal(g.run('musicSource.buffer.name'),'title');g.run('startMode("solo")');assert.equal(g.run('musicSource.buffer.name'),'selection');
+});
