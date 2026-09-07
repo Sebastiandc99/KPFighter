@@ -1011,6 +1011,6 @@ button, .name-row strong, .choice-tile strong, .stage-card strong { font-weight:
 .campaign-status { position: absolute; top: 22%; left: 20%; right: 20%; text-align: center; color: #ffdf67; font: 400 clamp(10px,1.5cqw,17px)/1.2 var(--pixel-font); text-shadow: 1px 2px #091339; z-index: 9; pointer-events: none; }
 .two-touch .campaign-status { top: 17%; }
 
-.portrait-galante { left: 7%; }
-.portrait-galante img { object-position: 50% 25%; }
-.choice-tile[data-pick="galante"] img { object-position: center 20%; }
+.portrait-galante { left: 7%; border: 0; background: transparent; box-shadow: none; }
+.portrait-galante img { object-fit: contain; object-position: center bottom; filter: drop-shadow(4px 6px 2px rgba(0,0,0,.5)); }
+.choice-tile[data-pick="galante"] img { object-fit: contain; object-position: center; background: #142341; }

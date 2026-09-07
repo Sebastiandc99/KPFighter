@@ -52,6 +52,7 @@ const stageRoster = Object.keys(stages);
 const stageImages = Object.fromEntries(stageRoster.map(key => [key, loadImage(stages[key].src)]));
 
 const assets = {
+  galante: loadImage("assets/galante-atlas-v2.webp"),
   kicksA: loadImage("assets/kicks-classic-a-v1.png"),
   kicksB: loadImage("assets/kicks-classic-b-v1.png"),
   flor: loadImage("assets/flor-atlas-v1.png"),
@@ -79,7 +80,7 @@ const POSES = {
 };
 
 const stats = {
-  galante: { name: "GALANTE", speed: 242, jump: 595, defaultFace: 1, size: 222, height: 178, width: 34, description: "LÁTIGO CON PINCHES · EVASIÓN DE HUMO", ability: null },
+  galante: { name: "GALANTE", speed: 242, jump: 595, defaultFace: 1, size: 210, height: 178, width: 34, description: "LÁTIGO CON PINCHES · EVASIÓN DE HUMO", ability: null },
   flor: { name: "FLOR", speed: 280, jump: 610, defaultFace: 1, size: 199, height: 165, width: 23, description: "BOCHA DE HOCKEY", ability: null },
   facu: { name: "FACU", speed: 276, jump: 615, defaultFace: 1, size: 222, height: 188, width: 25, description: "BIGOTE BOOMERANG", ability: null },
   sergio: { name: "SERGIO", speed: 260, jump: 595, defaultFace: 1, size: 210, height: 184, width: 32, description: "PANZAZO · ASADO · FERNET", ability: null },
@@ -1421,6 +1422,7 @@ function draw() {
 }
 
 function poseFor(f) {
+  if(f.kind === "galante" && state === "intro" && introElapsed < ROUND_AUDIO[match.round].timing.fight) return 15;
   if(f.action==="roll")return 8;
   const progress = actionProgress(f);
   if (f.action === "hit") return POSES[f.kind].hit;
@@ -1443,6 +1445,7 @@ function poseFor(f) {
   if (f.kind === "flor" && f.lowAttack && f.action === "kick") return POSES.flor.sweep;
   if (f.kind === "facu" && f.lowAttack && f.action === "kick") return POSES.facu.sweep;
   if (f.kind === "marechal" && f.lowAttack && f.action === "kick") return POSES.marechal.sweep;
+  if (f.kind === "galante" && f.lowAttack) return POSES.galante.sweep;
   if (f.lowAttack) return f.kind === "blotta" && f.action === "kick" ? POSES.blotta.sweep : 8;
   if (f.action === "punch") {
     return progress < .16 || progress > .86 ? POSES[f.kind].idle : f.kind === "sergio" ? 11 : POSES[f.kind].punch;
@@ -1494,6 +1497,7 @@ function fighterMotion(f) {
   const moving = f.grounded && f.action === "idle" && !f.crouching && !f.guarding && Math.abs(f.vx) > 1;
 
   if (f.action === "idle") {
+    if(f.kind === "galante" && state === "intro" && introElapsed < ROUND_AUDIO[match.round].timing.fight){motion.dy=Math.sin(introElapsed*20)*1.4;motion.rotation=Math.sin(introElapsed*14)*.009;}
     if (moving) {
       const weight = Math.min(1, Math.abs(f.vx) / stats[f.kind].speed);
       const step = Math.sin(f.walkPhase * Math.PI / 2);
@@ -2593,56 +2597,15 @@ syncViewport();
 if (window.location?.search && new URLSearchParams(window.location.search).has("ranking")) showRanking();
 requestAnimationFrame(loop);
 
-// Galante is drawn in a compact pixel canvas so every standard pose keeps his uniform.
+// All Galante poses share one shaded atlas, including movement and eating.
 function galanteSpriteFrame(frame) {
   const key='galante:'+frame.pose;
   if(spriteFrames.has(key)) return spriteFrames.get(key);
+  const image=assets.galante;
+  if(!image.complete || !image.naturalWidth) return null;
   const surface=document.createElement('canvas');surface.width=surface.height=270;
-  const pixel=document.createElement('canvas');pixel.width=pixel.height=135;
-  const p=pixel.getContext('2d'),pose=frame.pose;
-  const crouch=[5,8].includes(pose),cy=crouch?15:0;
-  const box=(x,y,w,h,c)=>{p.fillStyle=c;p.fillRect(Math.round(x),Math.round(y),w,h);};
-  const poly=(points,c)=>{p.fillStyle=c;p.beginPath();points.forEach(([x,y],i)=>i?p.lineTo(x,y):p.moveTo(x,y));p.closePath();p.fill();};
-  const limb=(points,width,color)=>{p.strokeStyle='#101728';p.lineWidth=width+4;p.lineJoin='round';p.beginPath();points.forEach(([x,y],i)=>i?p.lineTo(x,y):p.moveTo(x,y));p.stroke();p.strokeStyle=color;p.lineWidth=width;p.stroke();};
-  const kick=[2,13,14].includes(pose),stride=pose===6?9:pose===7?-9:0;
-  // Heavy boots, navy trousers, silver reflective ankle bands.
-  limb([[55,87+cy],[48-stride,106],[37-stride,124]],18,'#243961');
-  box(28-stride,121,28,8,'#16171b');box(30-stride,121,23,3,'#62503c');
-  box(37-stride,111,18,5,'#c3cad1');
-  const foot=kick?(pose===13?[119,116]:pose===14?[121,64]:[122,86]):[88+stride,125];
-  limb([[76,88+cy],kick?[96,89]:[80+stride,108],foot],19,'#304874');
-  box(foot[0]-6,foot[1]-3,22,8,'#17191d');box(foot[0]-5,foot[1]-3,18,3,'#695942');
-  if(!kick)box(79+stride,112,17,5,'#c4cbd2');
-  p.save();p.translate(0,cy);
-  // Broad belly, shaded yellow jacket and belt.
-  poly([[45,43],[79,42],[92,59],[95,81],[86,96],[44,96],[33,80],[35,57]],'#111b2d');
-  poly([[44,45],[78,45],[87,60],[91,80],[84,91],[44,91],[37,79],[39,57]],'#dcae11');
-  poly([[49,46],[74,46],[84,62],[85,80],[79,88],[46,86],[40,74],[42,56]],'#ffdb34');
-  box(41,64,46,5,'#dae0df');box(40,81,47,5,'#c8d0d1');box(48,48,5,16,'#d3dadd');
-  box(45,91,41,5,'#17253c');box(64,91,7,5,'#adb3b5');
-  box(64,53,1,35,'#af840d');for(let y=59;y<86;y+=8)box(66,y,2,2,'#5c5221');
-  p.fillStyle='#254b80';p.font='bold 5px sans-serif';p.fillText('Newmont',67,59);
-  // Gloves and sleeves; all uppercut, guard and normal attacks keep the same body.
-  const hand=pose===1?[114,53]:pose===12?[89,18]:pose===9?[86,37]:pose===4?[103,59]:[90,65];
-  limb([[42,52],[30,64],[38,72]],13,'#e6bb22');box(25,61,12,6,'#bdc7cf');box(30,68,14,12,'#392e26');
-  limb([[80,51],[89,58],hand],14,'#edc222');
-  box(hand[0]-10,hand[1]-3,6,11,'#253a60');box(hand[0]-2,hand[1]-6,13,13,'#322b25');box(hand[0],hand[1]-4,7,3,'#73604a');
-  // Neck, fair skin, dark beard, safety glasses, white hard hat and lamp.
-  box(57,36,18,12,'#b77958');
-  poly([[51,20],[72,19],[82,27],[80,42],[72,48],[57,44],[50,34]],'#d29370');
-  box(55,24,19,12,'#edb28a');
-  poly([[51,31],[57,37],[68,39],[76,34],[80,30],[79,42],[72,48],[58,45],[52,40]],'#292725');
-  box(61,38,12,2,'#b67965');box(62,41,9,1,'#95766c');
-  box(51,26,30,3,'#111923');box(52,28,11,6,'#182432');box(67,28,11,6,'#182432');
-  box(54,28,8,3,'#c1cdd1');box(69,28,7,3,'#cad4d3');box(59,29,2,2,'#292725');box(72,29,2,2,'#292725');
-  box(64,30,3,6,'#f0ba94');
-  poly([[46,20],[49,10],[57,5],[70,4],[80,11],[83,22]],'#d4d8da');
-  poly([[50,18],[52,11],[60,7],[70,7],[77,12],[79,20]],'#fbfaf0');
-  box(44,20,41,5,'#25272a');box(46,20,37,3,'#f4edda');box(62,6,4,6,'#d94332');
-  box(77,11,8,8,'#1b2027');box(78,12,5,5,'#8fa5b4');
-  if(pose===3){box(52,28,27,3,'#533427');}
-  p.restore();
-  const paint=surface.getContext('2d');paint.imageSmoothingEnabled=false;paint.drawImage(pixel,0,0,270,270);
+  const paint=surface.getContext('2d');paint.imageSmoothingEnabled=false;
+  paint.drawImage(image,(frame.pose%4)*270,Math.floor(frame.pose/4)*270,270,270,0,0,270,270);
   spriteFrames.set(key,surface);return surface;
 }
 
@@ -2661,19 +2624,14 @@ function drawGalanteProps(f,frame,opacity) {
   ctx.save();ctx.globalAlpha=opacity;
   // The intro clock freezes with pause; sandwich is gone before FIGHT finishes.
   if(state==='intro' && introElapsed<ROUND_AUDIO[match.round].timing.fight) {
+    // The sandwich is part of pose 15; only the falling crumbs are procedural.
     ctx.translate(x,y);ctx.scale(f.facing*FIGHTER_SCALE,FIGHTER_SCALE);
-    const bite=Math.floor(introElapsed*5),lift=Math.sin(introElapsed*18)*4;
-    const width=Math.max(6,24-bite*2);
-    ctx.fillStyle='#382c23';ctx.fillRect(14,-135+lift,17,11);
-    ctx.fillStyle='#e8ad58';ctx.fillRect(10,-141+lift,width,5);
-    ctx.fillStyle='#6fbb49';ctx.fillRect(10,-136+lift,width,2);
-    ctx.fillStyle='#994c35';ctx.fillRect(10,-134+lift,width,3);
-    ctx.fillStyle='#f1c778';ctx.fillRect(10,-131+lift,width,4);
-    for(let i=0;i<3;i++){ctx.fillRect(15+i*6,-122+((introElapsed*40+i*7)%20),2,2);}
+    ctx.fillStyle='#ebbe70';
+    for(let i=0;i<3;i++)ctx.fillRect(27+i*3,-128+((introElapsed*45+i*9)%25),2,2);
     ctx.restore();return;
   }
   const active=f.action==='special',progress=actionProgress(f);
-  const startX=x+f.facing*43*FIGHTER_SCALE,startY=y-105*FIGHTER_SCALE;
+  const startX=x+frame.motion.dx+f.facing*(active?90:39)*FIGHTER_SCALE,startY=y+frame.motion.dy-(active?125:123)*FIGHTER_SCALE;
   const extension=active?Math.sin(Math.min(1,progress/.42)*Math.PI/2)*(progress>.65?Math.max(0,(1-progress)/.35):1):0;
   const endX=startX+f.facing*(active?extension*(MAX_FIGHTER_DISTANCE+45):15);
   const endY=active?startY:y-12;

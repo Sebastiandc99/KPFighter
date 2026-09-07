@@ -148,3 +148,9 @@ Audio KO: grabación del usuario convertida a MP3 para compatibilidad. Comienza 
 - Torneo de seis rivales con dificultad progresiva más alta desde el primero.
 - CPU con escapes de esquina y escenario ampliado con cámara lateral.
 - Verificación: `node --test tests/combat.test.cjs` (74 pruebas).
+
+### Corrección visual de Galante
+
+Sprites ilustrados con sombreado arcade para los 16 cuadros de combate, movimiento y entrada. Selección con el cuerpo completo recortado y fondo transparente, sin el póster, estadísticas ni carteles.
+
+Arte generado con la herramienta de imágenes integrada. Brief: conservar cara, casco blanco, anteojos, barba, panza, uniforme Newmont amarillo y azul con reflectivos; igualar el detalle del sprite de Sergio; producir poses separadas sin textos ni escenario. Las hojas originales se normalizan con `scripts/build-galante-assets.cjs` (requiere Sharp), que convierte el fondo de croma en transparencia y organiza las poses en celdas de 270 px.
