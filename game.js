@@ -52,7 +52,7 @@ const stageRoster = Object.keys(stages);
 const stageImages = Object.fromEntries(stageRoster.map(key => [key, loadImage(stages[key].src)]));
 
 const assets = {
-  padrino: loadImage("assets/padrino-atlas-v1.webp"),
+  padrino: loadImage("assets/padrino-atlas-v2.webp"),
   dachshund: loadImage("assets/padrino-dog-v1.webp"),
   galante: loadImage("assets/galante-atlas-v3.webp"),
   kicksA: loadImage("assets/kicks-classic-a-v1.png"),

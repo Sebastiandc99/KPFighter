@@ -36,9 +36,9 @@ async function isolate(region) {
   const w=Math.round(meta.width*scale),h=Math.round(meta.height*scale);
   const resized=await sharp(crop).resize(w,h).png().toBuffer();
   frames.push({input:resized,left:col*270+Math.round((270-w)/2),top:row*270+260-h});
-  if(pose===15)await sharp(crop).webp({quality:95,alphaQuality:100}).toFile('assets/padrino-dog-v1.webp');
-  if(pose===0)await sharp(crop).webp({quality:95,alphaQuality:100}).toFile('assets/padrino-portrait-v1.webp');
+  // The projectile asset stays independent of face revisions.
+  if(pose===0)await sharp(crop).webp({quality:95,alphaQuality:100}).toFile('assets/padrino-portrait-v2.webp');
  }
- await sharp({create:{width:1080,height:1080,channels:4,background:'#00000000'}}).composite(frames).webp({quality:94,alphaQuality:100}).toFile('assets/padrino-atlas-v1.webp');
+ await sharp({create:{width:1080,height:1080,channels:4,background:'#00000000'}}).composite(frames).webp({quality:94,alphaQuality:100}).toFile('assets/padrino-atlas-v2.webp');
  console.log('Saved El Padrino atlas, portrait and dachshund projectile.');
 })();
