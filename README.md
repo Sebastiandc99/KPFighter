@@ -141,3 +141,10 @@ Se generaron dos atlases de poses con la herramienta integrada: assets/kicks-cla
 La dificultad inicial sube nuevamente: intervalo de decisión 0,30–0,50 s, mayor actividad y defensa. Los niveles siguientes mantienen una progresión creciente hasta experto.
 
 Audio KO: grabación del usuario convertida a MP3 para compatibilidad. Comienza con el cartel K.O. en cada round ganado por nocaut, omitiendo 179 ms de silencio inicial; cartel y voz duran 1,24 s. Sin repetición en tiempo agotado o empate. Pausa/silencio conservan la posición; salir o comenzar round limpia la voz.
+
+## Actualización 2026-09-07
+
+- Galante: uniforme minero, entrada comiendo un sánguche, caminata más lenta, látigo de alcance completo con sonido y evasión de humo sin energía.
+- Torneo de seis rivales con dificultad progresiva más alta desde el primero.
+- CPU con escapes de esquina y escenario ampliado con cámara lateral.
+- Verificación: `node --test tests/combat.test.cjs` (74 pruebas).

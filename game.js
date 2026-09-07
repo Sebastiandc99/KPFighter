@@ -4,6 +4,12 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
 const VIEW_WIDTH = 960;
+const STAGE_LEFT = -180;
+const STAGE_RIGHT = VIEW_WIDTH + 180;
+const FIGHTER_LEFT = STAGE_LEFT + 52;
+const FIGHTER_RIGHT = STAGE_RIGHT - 52;
+const MAX_FIGHTER_DISTANCE = 760;
+let cameraX = 0;
 const VIEW_HEIGHT = 540;
 const FIGHTER_SCALE = .9;
 const spriteFrames = new Map();
@@ -63,6 +69,7 @@ const assets = {
 };
 
 const POSES = {
+  galante: {idle:0, punch:1, kick:2, hit:3, power:4, sweep:5},
   flor: {idle:0, punch:1, kick:2, hit:3, power:4, sweep:5},
   facu: {idle:0, punch:1, kick:2, hit:3, power:4, sweep:5},
   sergio: { idle: 0, punch: 1, kick: 2, hit: 3, meat: 4, bottle: 5 },
@@ -72,6 +79,7 @@ const POSES = {
 };
 
 const stats = {
+  galante: { name: "GALANTE", speed: 242, jump: 595, defaultFace: 1, size: 222, height: 178, width: 34, description: "LÁTIGO CON PINCHES · EVASIÓN DE HUMO", ability: null },
   flor: { name: "FLOR", speed: 280, jump: 610, defaultFace: 1, size: 199, height: 165, width: 23, description: "BOCHA DE HOCKEY", ability: null },
   facu: { name: "FACU", speed: 276, jump: 615, defaultFace: 1, size: 222, height: 188, width: 25, description: "BIGOTE BOOMERANG", ability: null },
   sergio: { name: "SERGIO", speed: 260, jump: 595, defaultFace: 1, size: 210, height: 184, width: 32, description: "PANZAZO · ASADO · FERNET", ability: null },
@@ -80,7 +88,7 @@ const stats = {
   marechal: { name: "MARECHAL", speed: 270, jump: 620, defaultFace: 1, size: 242, height: 202, width: 23, description: "ARTES MARCIALES · RAYOS", ability: null }
 };
 
-const roster = ["sergio", "blotta", "tunki", "marechal", "facu", "flor"];
+const roster = ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante"];
 const FLOOR = 448;
 const STEP = 1 / 120;
 const JUMP_BOOST = 1.25;
@@ -110,6 +118,7 @@ const KO_AUDIO_BASE64 = "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAA
 let koVoice = null;
 
 const COMBAT_AUDIO = {
+  whip: {src: "assets/whip.wav", volume: 1.15, start: 0, end: .52},
   hockey: {src: "assets/hockey-hit.wav", volume: 1.35, start: 0, end: .8},
   boomerang: {src: "assets/boomerang.wav", volume: 1.1, start: 0, end: 1},
   // Skip measured leading silence so even a close-range jab is audible.
@@ -283,7 +292,7 @@ function makeFighter(kind, x, isPlayer) {
     mustacheAway: false, specialSpawned: false, specialStyle: "ki",
     queuedAction: null, queueTime: 0,
     crouching: false, guarding: false, guardTime: 0, crouchTime: 0,
-    teleportDone: false, teleportSmokeStarted: false, teleportTarget: x,
+    aiEscapeCooldown: 0, teleportDone: false, teleportSmokeStarted: false, teleportTarget: x,
     slamLaunched: false, slamDiving: false, slamLanded: false, slamFromAir: false,
     landingSquash: 0,
     attackLanded: false, invuln: 0, specialCooldown: 0,
@@ -362,13 +371,14 @@ function openStageSelection() {
 }
 
 const DIFFICULTIES = [
- {name:"NORMAL", reaction:.30, guard:.39, attack:.72, speed:.80, power:.23, tactics:.37},
- {name:"MEDIA", reaction:.24, guard:.48, attack:.79, speed:.84, power:.28, tactics:.47},
- {name:"AVANZADA", reaction:.19, guard:.58, attack:.85, speed:.87, power:.33, tactics:.57},
- {name:"DIFÍCIL", reaction:.14, guard:.68, attack:.92, speed:.91, power:.38, tactics:.67},
- {name:"EXPERTO", reaction:.10, guard:.78, attack:.98, speed:.95, power:.42, tactics:.76}
+ {name:"NORMAL", reaction:.23, guard:.49, attack:.83, speed:.87, power:.29, tactics:.49},
+ {name:"MEDIA", reaction:.19, guard:.57, attack:.88, speed:.90, power:.34, tactics:.58},
+ {name:"AVANZADA", reaction:.15, guard:.65, attack:.93, speed:.93, power:.38, tactics:.67},
+ {name:"DIFÍCIL", reaction:.12, guard:.73, attack:.96, speed:.96, power:.42, tactics:.75},
+ {name:"EXPERTO", reaction:.09, guard:.81, attack:.99, speed:.99, power:.46, tactics:.82},
+ {name:"MAESTRO", reaction:.08, guard:.84, attack:1, speed:1, power:.49, tactics:.87}
 ];
-function difficulty() { return DIFFICULTIES[campaign && gameMode==="solo" ? Math.min(campaign.index,4) : 3]; }
+function difficulty() { return DIFFICULTIES[campaign && gameMode==="solo" ? Math.min(campaign.index,DIFFICULTIES.length-1) : 3]; }
 function beginGame() {
   if(gameMode!=="solo") { startGame(playerChoice); return; }
   const opponents=roster.filter(kind=>kind!==playerChoice);
@@ -407,6 +417,7 @@ function startRound() {
   clearHeld();
   roundTime = 60;
   aiClock = 0;
+  cameraX = 0;
   screenShake = 0;
   stageTime = 0;
   introElapsed = 0;
@@ -431,8 +442,8 @@ function startRound() {
   document.getElementById("winnerForm").hidden = true;
   document.getElementById("cpuResultNote").hidden = true;
   for(const [slot,f] of [[1,player],[2,cpu]]){
-    document.getElementById("evadeLabel"+slot).textContent=f.kind==="blotta"?"HUMO":"RODAR";
-    document.getElementById("evadeBtn"+slot).setAttribute("aria-label",(f.kind==="blotta"?"Humo":"Rodar")+" sin gastar energía, Jugador "+slot);
+    document.getElementById("evadeLabel"+slot).textContent=["blotta","galante"].includes(f.kind)?"HUMO":"RODAR";
+    document.getElementById("evadeBtn"+slot).setAttribute("aria-label",(["blotta","galante"].includes(f.kind)?"Humo":"Rodar")+" sin gastar energía, Jugador "+slot);
   }
   const ability = stats[player.kind].ability;
   ui.abilityBtn.hidden = ability !== "slam";
@@ -467,7 +478,7 @@ function announce(text, duration = 0) {
 function positionSpeech() {
   const blotta = fighters.find(f => f.kind === "blotta");
   if (!blotta) return;
-  ui.speech.style.left = (blotta.x / VIEW_WIDTH * 100) + "%";
+  ui.speech.style.left = ((blotta.x-cameraX) / VIEW_WIDTH * 100) + "%";
   ui.speech.style.top = "36%";
 }
 
@@ -513,6 +524,7 @@ function update(dt) {
       }else koVoice.elapsed+=dt;
       if(koVoice.elapsed>=KO_AUDIO.duration)stopKOAudio();else syncKOAudio();
     }
+    updateCamera(dt);
     updateParticles(dt);
     updateAfterimages(dt);
     updateEffects(dt);
@@ -548,7 +560,7 @@ function update(dt) {
     return;
   }
   fighters.forEach(f => {
-    for (const name of ["invuln", "specialCooldown", "flash", "landingSquash", "guardTime", "crouchTime", "queueTime", "comboTime", "guardFlash"]) {
+    for (const name of ["invuln", "aiEscapeCooldown", "specialCooldown", "flash", "landingSquash", "guardTime", "crouchTime", "queueTime", "comboTime", "guardFlash"]) {
       f[name] = Math.max(0, f[name] - dt);
     }
     if (!f.queueTime) f.queuedAction = null;
@@ -564,6 +576,7 @@ function update(dt) {
   else if (aiEnabled) updateAI(dt);
   fighters.forEach(f => updateFighter(f, dt));
   separateFighters();
+  updateCamera(dt);
   // Capture both contacts before resolving so simultaneous hits can trade.
   const contacts = fighters.map(f => attackContact(f, f === player ? cpu : player)).filter(Boolean);
   resolvingContacts = true;
@@ -605,11 +618,22 @@ function updateAI(dt) {
   const distance = Math.abs(dx);
   const toward = Math.sign(dx) || 1;
   setStance(cpu, cpu.crouchTime > 0, cpu.guardTime > 0);
-  if (isLocked(cpu)) return;
+  if (isLocked(cpu) && cpu.action!=="block") return;
   aiClock -= dt;
   if (aiClock > 0) return;
   const level=difficulty();
   aiClock = level.reaction + Math.random() * level.reaction * .65;
+  const cornered=(cpu.x < FIGHTER_LEFT+125 && player.x>cpu.x) ||
+    (cpu.x > FIGHTER_RIGHT-125 && player.x<cpu.x);
+  if(cornered && distance<155 && cpu.grounded && cpu.aiEscapeCooldown===0 &&
+      Math.random()<.65+level.tactics*.3){
+    if(evade(cpu)){
+      cpu.guardTime=cpu.crouchTime=0;
+      cpu.aiEscapeCooldown=2.4;
+      return;
+    }
+  }
+  if (isLocked(cpu)) return;
   if (Math.random() > level.attack) { cpu.moveIntent=0; return; }
   if (cpu.guarding || cpu.crouching) { cpu.moveIntent = 0; return; }
   const incoming = projectiles.some(p => p.owner === player && Math.abs(p.x - cpu.x) < 220 && (cpu.x - p.x) * p.vx > 0);
@@ -627,7 +651,6 @@ function updateAI(dt) {
     cpu.moveIntent = 0;
     return;
   }
-  if(cpu.kind!=="blotta" && (cpu.x<100 || cpu.x>860) && distance<130 && Math.random()<level.tactics*.3){evade(cpu);return;}
   if (cpu.kind === "blotta" && distance < 260 && Math.random() < level.tactics * .18) {
     attack(cpu, "teleport");
     return;
@@ -665,7 +688,9 @@ function updateAI(dt) {
 function integrateBody(f, dt) {
   const wasOnFloor = f.grounded;
   if (!f.grounded) f.vy += 1650 * dt;
-  f.x = Math.max(52, Math.min(908, f.x + f.vx * dt));
+  const other=f===player?cpu:player;
+  f.x = Math.max(FIGHTER_LEFT, other.x-MAX_FIGHTER_DISTANCE,
+    Math.min(FIGHTER_RIGHT, other.x+MAX_FIGHTER_DISTANCE, f.x + f.vx * dt));
   f.y += f.vy * dt;
   if (f.y >= FLOOR) {
     f.y = FLOOR;
@@ -751,9 +776,9 @@ function updateFighter(f, dt) {
         f.teleportDone = true;
         const direction = f.teleportDirection;
         let destination = direction ? f.x + direction * 235 : other.x + (f.x < other.x ? 110 : -110);
-        destination = Math.max(65, Math.min(895, destination));
-        if (Math.abs(destination - other.x) < 68) destination = other.x < 480 ? other.x + 110 : other.x - 110;
-        f.x = f.prevX = Math.max(65, Math.min(895, destination));
+        destination = Math.max(STAGE_LEFT+65, Math.min(STAGE_RIGHT-65, destination));
+        if (Math.abs(destination - other.x) < 68) destination = other.x < (STAGE_LEFT+STAGE_RIGHT)/2 ? other.x + 110 : other.x - 110;
+        f.x = f.prevX = Math.max(STAGE_LEFT+65, Math.min(STAGE_RIGHT-65, destination));
         f.facing = other.x >= f.x ? 1 : -1;
         smokeBurst(f.x, FLOOR - 70, 22);
         addEffect("ring", f.x, FLOOR - 80, "#cddcff", 70, .32);
@@ -849,11 +874,11 @@ function separateFighters() {
   const overlap = spacing - Math.abs(dx);
   if (overlap <= 0) return;
   const sign = Math.sign(dx) || 1;
-  player.x = Math.max(52, Math.min(908, player.x - sign * overlap / 2));
-  cpu.x = Math.max(52, Math.min(908, cpu.x + sign * overlap / 2));
+  player.x = Math.max(FIGHTER_LEFT, Math.min(FIGHTER_RIGHT, player.x - sign * overlap / 2));
+  cpu.x = Math.max(FIGHTER_LEFT, Math.min(FIGHTER_RIGHT, cpu.x + sign * overlap / 2));
   // Transfer the unfulfilled push when a fighter is already against the stage edge.
   if (Math.abs(cpu.x - player.x) < spacing) {
-    if (player.x === 52 || player.x === 908) cpu.x = player.x + sign * spacing;
+    if (player.x === FIGHTER_LEFT || player.x === FIGHTER_RIGHT) cpu.x = player.x + sign * spacing;
     else player.x = cpu.x - sign * spacing;
   }
 }
@@ -882,12 +907,12 @@ function jump(f) {
 function evade(f) {
   if(state!=="playing" || !f || !f.grounded || !["idle","block"].includes(f.action))return false;
   if(f.action==="block"){f.action="idle";f.actionTime=0;}
-  return attack(f,f.kind==="blotta"?"teleport":"roll");
+  return attack(f,["blotta","galante"].includes(f.kind)?"teleport":"roll");
 }
 function attack(f, type) {
   if (state !== "playing" || !f || !["punch", "kick", "special", "teleport", "slam", "roll"].includes(type)) return false;
-  if (type === "teleport" && f.kind !== "blotta") return false;
-  if (["roll","teleport"].includes(type) && (!f.grounded || (type==="roll" && f.kind==="blotta"))) return false;
+  if (type === "teleport" && !["blotta","galante"].includes(f.kind)) return false;
+  if (["roll","teleport"].includes(type) && (!f.grounded || (type==="roll" && ["blotta","galante"].includes(f.kind)))) return false;
   if (type === "slam" && f.kind !== "tunki") return false;
   if (isLocked(f)) {
     if (humanFighter(f)) queueAction(f, type);
@@ -920,7 +945,7 @@ function attack(f, type) {
   if (type === "roll") {
     const other=f===player?cpu:player;
     const input=humanFighter(f)?Number(fighterInput(f).right)-Number(fighterInput(f).left):0;
-    f.rollDirection=f.x<140?1:f.x>820?-1:input || Math.sign(other.x-f.x) || f.facing;
+    f.rollDirection=f.x<FIGHTER_LEFT+88?1:f.x>FIGHTER_RIGHT-88?-1:input || Math.sign(other.x-f.x) || f.facing;
     f.invuln=Math.max(f.invuln,.34);f.vx=f.rollDirection*580;
   } else if (type === "slam") {
     f.slamLaunched = f.slamDiving = f.slamLanded = false;
@@ -933,7 +958,7 @@ function attack(f, type) {
     f.vx = f.vy = 0;
   } else if (type === "special") {
     f.specialSpawned = false;
-    f.specialStyle = f.kind === "flor" ? "hockey" : f.kind === "facu" ? "boomerang" : f.kind === "sergio" ? (f.projectileToggle++ % 2 ? "bottle" : "meat") : f.kind === "tunki" ? "flowers" : f.kind === "marechal" ? "lightning" : "ki";
+    f.specialStyle = f.kind === "galante" ? "whip" : f.kind === "flor" ? "hockey" : f.kind === "facu" ? "boomerang" : f.kind === "sergio" ? (f.projectileToggle++ % 2 ? "bottle" : "meat") : f.kind === "tunki" ? "flowers" : f.kind === "marechal" ? "lightning" : "ki";
     if (COMBAT_AUDIO[f.specialStyle]) f.attackSound = startCombatSound(f.specialStyle);
     f.vx = 0;
   } else if (f.kickStyle === "volley") {
@@ -953,6 +978,7 @@ function attack(f, type) {
 }
 
 function spawnProjectile(owner, style) {
+  if (style === "whip") { strikeWhip(owner); return; }
   if (style === "boomerang") { spawnBoomerang(owner); return; }
   const config = style === "hockey" ? { speed: 570, damage: 13, radius: 12 } : style === "ki" ? { speed: 470, damage: 13, radius: 16 } :
     style === "lightning" ? { speed: 560, damage: 13, radius: 15 } :
@@ -990,7 +1016,7 @@ function updateProjectiles(dt) {
     }
     const target = p.owner === player ? cpu : player;
     // End as soon as the leading edge reaches the visible screen boundary.
-    if (p.life <= 0 || (p.vx < 0 ? p.x - p.radius <= 0 : p.x + p.radius >= VIEW_WIDTH) || p.y + p.radius >= FLOOR) {
+    if (p.life <= 0 || (p.vx < 0 ? p.x - p.radius <= STAGE_LEFT : p.x + p.radius >= STAGE_RIGHT) || p.y + p.radius >= FLOOR) {
       stopCombatSound(p.sound);
       projectiles.splice(i, 1);
       continue;
@@ -1296,7 +1322,7 @@ function updateParticles(dt) {
 }
 
 function powerColor(kind) {
-  return { flor: "#d7ff99", facu: "#ffe47a", sergio: "#ffc650", blotta: "#76daff", tunki: "#ff8bd5", marechal: "#a5eaff" }[kind];
+  return { galante: "#ffdb43", flor: "#d7ff99", facu: "#ffe47a", sergio: "#ffc650", blotta: "#76daff", tunki: "#ff8bd5", marechal: "#a5eaff" }[kind];
 }
 
 function addEffect(type, x, y, color, radius, life) {
@@ -1342,15 +1368,23 @@ function drawEffect(effect) {
   ctx.restore();
 }
 
+function updateCamera(dt) {
+  const left=Math.min(player.x,cpu.x),right=Math.max(player.x,cpu.x);
+  const target=Math.max(STAGE_LEFT,Math.min(STAGE_RIGHT-VIEW_WIDTH,(left+right)/2-VIEW_WIDTH/2));
+  cameraX+=(target-cameraX)*(1-Math.exp(-7*dt));
+  // Keep both fighters visible even after a teleport or a fast roll.
+  cameraX=Math.max(STAGE_LEFT,Math.min(STAGE_RIGHT-VIEW_WIDTH,
+    Math.max(right-(VIEW_WIDTH-90),Math.min(left-90,cameraX))));
+}
+
 function drawStage(image, parallaxX) {
   if (!image.complete || !image.naturalWidth) { ctx.fillStyle = "#16263a"; ctx.fillRect(0, 0, 960, 540); return; }
-  const width = image.naturalWidth;
-  const height = image.naturalHeight || width * 9 / 16;
-  const scale = Math.max(976 / width, 550 / height);
-  const cropWidth = 976 / scale;
-  const cropHeight = 550 / scale;
-  // Preserve image proportions and the plant's Newmont sign when framing 4:3 art.
-  ctx.drawImage(image, (width - cropWidth) / 2, (height - cropHeight) * .6, cropWidth, cropHeight, -8 + parallaxX, -5, 976, 550);
+  const width=image.naturalWidth,height=image.naturalHeight || width*9/16;
+  const drawWidth=VIEW_WIDTH+160,drawHeight=550;
+  const scale=Math.max(drawWidth/width,drawHeight/height);
+  const cropWidth=drawWidth/scale,cropHeight=drawHeight/scale;
+  ctx.drawImage(image,(width-cropWidth)/2,(height-cropHeight)*.6,cropWidth,cropHeight,
+    -80-cameraX*.35+parallaxX,-5,drawWidth,drawHeight);
 }
 
 function draw() {
@@ -1375,6 +1409,7 @@ function draw() {
   ctx.fillStyle = floorShade;
   ctx.fillRect(0, 400, 960, 140);
 
+  ctx.translate(-cameraX, 0);
   drawShadow(player);
   drawShadow(cpu);
   afterimages.forEach(drawAfterimage);
@@ -1417,6 +1452,7 @@ function poseFor(f) {
     if (progress < .15) return POSES[f.kind].idle;
     if (f.kind === "blotta") return POSES.blotta.power;
     if (f.kind === "tunki") return POSES.tunki.power;
+    if (f.kind === "galante") return POSES.galante.power;
     if (f.kind === "flor") return POSES.flor.power;
     if (f.kind === "facu") return POSES.facu.power;
     if (f.kind === "marechal") return POSES.marechal.power;
@@ -1673,6 +1709,7 @@ function drawMotionLines(f, motion) {
 }
 
 function spriteFrame(frame) {
+  if(frame.kind === "galante") return galanteSpriteFrame(frame);
   if(frame.pose===13 || frame.pose===14)return classicKickFrame(frame);
   if (frame.kind === "flor") return florSpriteFrame(frame);
   if (frame.kind === "facu") return facuSpriteFrame(frame);
@@ -1847,7 +1884,7 @@ function catchBoomerang(p) {
 function updateBoomerang(p,dt) {
   p.age+=dt;p.life-=dt;p.spin+=dt*18;
   const mouth=facuMouth(p.owner);
-  if(!p.returning && (p.age>=.62 || p.x-p.radius<=0 || p.x+p.radius>=VIEW_WIDTH))p.returning=true;
+  if(!p.returning && (p.age>=.62 || p.x-p.radius<=STAGE_LEFT || p.x+p.radius>=STAGE_RIGHT))p.returning=true;
   if(p.returning){
     const dx=mouth.x-p.x,dy=mouth.y-p.y,distance=Math.hypot(dx,dy),speed=690;
     if(distance<=speed*dt+8 || p.life<=0){catchBoomerang(p);return;}
@@ -1905,6 +1942,7 @@ function drawFighter(f) {
     opacity *= elapsed < .16 ? 1 - elapsed / .16 : elapsed < .45 ? 0 : Math.min(1, (elapsed - .45) / .18);
   }
   drawSpriteFrame(frame, opacity);
+  if(f.kind === "galante") drawGalanteProps(f, frame, opacity);
   if (f.guarding || f.guardFlash > 0) {
     ctx.save();
     ctx.globalAlpha = .35 + f.guardFlash * 2;
@@ -2210,7 +2248,7 @@ function disconnectCombatVoice(voice) {
 function stopCombatSound(voice, immediate = false) {
   if (!voice) return;
   combatSounds.delete(voice);
-  const minAudible = ["lightning", "meat", "flowers", "boomerang", "hockey"].includes(voice.name) ? .08 : 0;
+  const minAudible = ["lightning", "meat", "flowers", "boomerang", "hockey", "whip"].includes(voice.name) ? .08 : 0;
   const heard = voice.audibleAt === null ? 0 : Math.max(0, (audioCtx?.currentTime ?? voice.elapsed) - voice.audibleAt);
   if (!immediate && voice.source && minAudible > heard && !muted && state === "playing") {
     // At point-blank range retain only a short attack transient, never the whole clip.
@@ -2554,3 +2592,98 @@ document.addEventListener("fullscreenchange", syncViewport);
 syncViewport();
 if (window.location?.search && new URLSearchParams(window.location.search).has("ranking")) showRanking();
 requestAnimationFrame(loop);
+
+// Galante is drawn in a compact pixel canvas so every standard pose keeps his uniform.
+function galanteSpriteFrame(frame) {
+  const key='galante:'+frame.pose;
+  if(spriteFrames.has(key)) return spriteFrames.get(key);
+  const surface=document.createElement('canvas');surface.width=surface.height=270;
+  const pixel=document.createElement('canvas');pixel.width=pixel.height=135;
+  const p=pixel.getContext('2d'),pose=frame.pose;
+  const crouch=[5,8].includes(pose),cy=crouch?15:0;
+  const box=(x,y,w,h,c)=>{p.fillStyle=c;p.fillRect(Math.round(x),Math.round(y),w,h);};
+  const poly=(points,c)=>{p.fillStyle=c;p.beginPath();points.forEach(([x,y],i)=>i?p.lineTo(x,y):p.moveTo(x,y));p.closePath();p.fill();};
+  const limb=(points,width,color)=>{p.strokeStyle='#101728';p.lineWidth=width+4;p.lineJoin='round';p.beginPath();points.forEach(([x,y],i)=>i?p.lineTo(x,y):p.moveTo(x,y));p.stroke();p.strokeStyle=color;p.lineWidth=width;p.stroke();};
+  const kick=[2,13,14].includes(pose),stride=pose===6?9:pose===7?-9:0;
+  // Heavy boots, navy trousers, silver reflective ankle bands.
+  limb([[55,87+cy],[48-stride,106],[37-stride,124]],18,'#243961');
+  box(28-stride,121,28,8,'#16171b');box(30-stride,121,23,3,'#62503c');
+  box(37-stride,111,18,5,'#c3cad1');
+  const foot=kick?(pose===13?[119,116]:pose===14?[121,64]:[122,86]):[88+stride,125];
+  limb([[76,88+cy],kick?[96,89]:[80+stride,108],foot],19,'#304874');
+  box(foot[0]-6,foot[1]-3,22,8,'#17191d');box(foot[0]-5,foot[1]-3,18,3,'#695942');
+  if(!kick)box(79+stride,112,17,5,'#c4cbd2');
+  p.save();p.translate(0,cy);
+  // Broad belly, shaded yellow jacket and belt.
+  poly([[45,43],[79,42],[92,59],[95,81],[86,96],[44,96],[33,80],[35,57]],'#111b2d');
+  poly([[44,45],[78,45],[87,60],[91,80],[84,91],[44,91],[37,79],[39,57]],'#dcae11');
+  poly([[49,46],[74,46],[84,62],[85,80],[79,88],[46,86],[40,74],[42,56]],'#ffdb34');
+  box(41,64,46,5,'#dae0df');box(40,81,47,5,'#c8d0d1');box(48,48,5,16,'#d3dadd');
+  box(45,91,41,5,'#17253c');box(64,91,7,5,'#adb3b5');
+  box(64,53,1,35,'#af840d');for(let y=59;y<86;y+=8)box(66,y,2,2,'#5c5221');
+  p.fillStyle='#254b80';p.font='bold 5px sans-serif';p.fillText('Newmont',67,59);
+  // Gloves and sleeves; all uppercut, guard and normal attacks keep the same body.
+  const hand=pose===1?[114,53]:pose===12?[89,18]:pose===9?[86,37]:pose===4?[103,59]:[90,65];
+  limb([[42,52],[30,64],[38,72]],13,'#e6bb22');box(25,61,12,6,'#bdc7cf');box(30,68,14,12,'#392e26');
+  limb([[80,51],[89,58],hand],14,'#edc222');
+  box(hand[0]-10,hand[1]-3,6,11,'#253a60');box(hand[0]-2,hand[1]-6,13,13,'#322b25');box(hand[0],hand[1]-4,7,3,'#73604a');
+  // Neck, fair skin, dark beard, safety glasses, white hard hat and lamp.
+  box(57,36,18,12,'#b77958');
+  poly([[51,20],[72,19],[82,27],[80,42],[72,48],[57,44],[50,34]],'#d29370');
+  box(55,24,19,12,'#edb28a');
+  poly([[51,31],[57,37],[68,39],[76,34],[80,30],[79,42],[72,48],[58,45],[52,40]],'#292725');
+  box(61,38,12,2,'#b67965');box(62,41,9,1,'#95766c');
+  box(51,26,30,3,'#111923');box(52,28,11,6,'#182432');box(67,28,11,6,'#182432');
+  box(54,28,8,3,'#c1cdd1');box(69,28,7,3,'#cad4d3');box(59,29,2,2,'#292725');box(72,29,2,2,'#292725');
+  box(64,30,3,6,'#f0ba94');
+  poly([[46,20],[49,10],[57,5],[70,4],[80,11],[83,22]],'#d4d8da');
+  poly([[50,18],[52,11],[60,7],[70,7],[77,12],[79,20]],'#fbfaf0');
+  box(44,20,41,5,'#25272a');box(46,20,37,3,'#f4edda');box(62,6,4,6,'#d94332');
+  box(77,11,8,8,'#1b2027');box(78,12,5,5,'#8fa5b4');
+  if(pose===3){box(52,28,27,3,'#533427');}
+  p.restore();
+  const paint=surface.getContext('2d');paint.imageSmoothingEnabled=false;paint.drawImage(pixel,0,0,270,270);
+  spriteFrames.set(key,surface);return surface;
+}
+
+function strikeWhip(owner) {
+  const target=owner===player?cpu:player;
+  const x=owner.x+owner.facing*(MAX_FIGHTER_DISTANCE+80),y=owner.y-105*FIGHTER_SCALE;
+  owner.whipEnd={x,y};
+  const box={left:Math.min(owner.x,x),right:Math.max(owner.x,x),top:y-14,bottom:y+14};
+  if(target.invuln<=0 && !isVanished(target) && overlaps(box,hurtBox(target))) {
+    hit(target,13,owner.facing*230,0,owner,{direction:owner.facing,sourceX:owner.x,projectile:true,low:false,x:target.x,y});
+  }
+}
+
+function drawGalanteProps(f,frame,opacity) {
+  const {x,y}=frame;
+  ctx.save();ctx.globalAlpha=opacity;
+  // The intro clock freezes with pause; sandwich is gone before FIGHT finishes.
+  if(state==='intro' && introElapsed<ROUND_AUDIO[match.round].timing.fight) {
+    ctx.translate(x,y);ctx.scale(f.facing*FIGHTER_SCALE,FIGHTER_SCALE);
+    const bite=Math.floor(introElapsed*5),lift=Math.sin(introElapsed*18)*4;
+    const width=Math.max(6,24-bite*2);
+    ctx.fillStyle='#382c23';ctx.fillRect(14,-135+lift,17,11);
+    ctx.fillStyle='#e8ad58';ctx.fillRect(10,-141+lift,width,5);
+    ctx.fillStyle='#6fbb49';ctx.fillRect(10,-136+lift,width,2);
+    ctx.fillStyle='#994c35';ctx.fillRect(10,-134+lift,width,3);
+    ctx.fillStyle='#f1c778';ctx.fillRect(10,-131+lift,width,4);
+    for(let i=0;i<3;i++){ctx.fillRect(15+i*6,-122+((introElapsed*40+i*7)%20),2,2);}
+    ctx.restore();return;
+  }
+  const active=f.action==='special',progress=actionProgress(f);
+  const startX=x+f.facing*43*FIGHTER_SCALE,startY=y-105*FIGHTER_SCALE;
+  const extension=active?Math.sin(Math.min(1,progress/.42)*Math.PI/2)*(progress>.65?Math.max(0,(1-progress)/.35):1):0;
+  const endX=startX+f.facing*(active?extension*(MAX_FIGHTER_DISTANCE+45):15);
+  const endY=active?startY:y-12;
+  ctx.lineWidth=5;ctx.strokeStyle='#1b171b';ctx.beginPath();ctx.moveTo(startX,startY);
+  ctx.quadraticCurveTo((startX+endX)/2,startY+(active?Math.sin(progress*20)*26:50),endX,endY);ctx.stroke();
+  for(let i=0;i<=32;i++){
+    const t=i/32,px=startX+(endX-startX)*t,py=startY+(endY-startY)*t+Math.sin(t*Math.PI)*(active?Math.sin(progress*20)*13:14);
+    ctx.fillStyle=i%2?'#d5bf9c':'#766357';ctx.fillRect(px-2,py-2,4,4);
+  }
+  ctx.fillStyle='#37343b';ctx.fillRect(endX-8,endY-7,16,14);ctx.fillStyle='#d8dce1';
+  for(const side of [-1,1]){ctx.beginPath();ctx.moveTo(endX-5,endY+side*5);ctx.lineTo(endX,endY+side*16);ctx.lineTo(endX+4,endY+side*5);ctx.fill();}
+  ctx.restore();
+}
