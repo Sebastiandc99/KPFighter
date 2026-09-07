@@ -27,8 +27,8 @@ function game() {
     }
     return nodes.get(id);
   }
-  const picks = ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante"].map(kind => node("pick-" + kind, { pick: kind }));
-  const portraits = ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante"].map(kind => node("portrait-" + kind, { portrait: kind }));
+  const picks = ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante", "padrino"].map(kind => node("pick-" + kind, { pick: kind }));
+  const portraits = ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante", "padrino"].map(kind => node("portrait-" + kind, { portrait: kind }));
   const stages = ["arcade", "mine", "newmont"].map(stage => node("stage-" + stage, { stage }));
   const leftRounds = [0, 1].map(i => node("left-round-" + i));
   const rightRounds = [0, 1].map(i => node("right-round-" + i));
@@ -217,8 +217,8 @@ test("an input buffered near recovery executes and damage stops at round end", (
 });
 
 test("all character matchups finish simulated fights with AI and rendering enabled", () => {
-  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante"]) {
-   for (const rival of ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante"].filter(other => other !== kind)) {
+  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante", "padrino"]) {
+   for (const rival of ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante", "padrino"].filter(other => other !== kind)) {
     const g = game();
     g.run('startGame("' + kind + '"); state = "playing"; aiEnabled = true;');
     g.run('cpu.kind = match.cpuKind = "' + rival + '";');
@@ -397,7 +397,7 @@ test("Marechal's lightning can be blocked or ducked like other high projectiles"
 });
 
 test("stance transitions interpolate, backward steps reverse, and attacks settle into rest", () => {
-  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante"]) {
+  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante", "padrino"]) {
     const g = game();
     g.run('startGame("' + kind + '"); state = "playing";');
     g.key("KeyS");
@@ -593,7 +593,7 @@ test("simultaneous lethal hits draw the round and pause freezes the interval", (
 });
 
 test("all fighters jump higher, remain in view and land without dealing automatic damage", () => {
-  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante"]) {
+  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante", "padrino"]) {
     const g = game();
     g.run('startGame("' + kind + '"); state = "playing"; var minY = FLOOR;');
     g.key("KeyW");
@@ -685,7 +685,7 @@ function enableCombatAudio(g) {
 }
 
 test("all four fighters uppercut with down+punch on keyboard and touch, launch once and return to crouch", () => {
-  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante"]) {
+  for (const kind of ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante", "padrino"]) {
     for (const input of ["keyboard", "touch"]) {
       const g = game();
       g.run(`startGame('${kind}', '${kind === "blotta" ? "marechal" : "blotta"}'); state = "playing"; player.x = 300; cpu.x = 370;`);
@@ -1039,15 +1039,15 @@ test('both touch players evade independently and Blotta smoke ignores power cool
 });
 test('solo tournament visits every different rival, grows difficulty and carries score to its final GAME OVER',()=>{
  const g=game();g.run('gameMode="solo";playerChoice="flor";beginGame()');const seen=[];let score=0;let previousReaction=1;
- for(let i=0;i<6;i++){
+ for(let i=0;i<7;i++){
   seen.push(g.run('cpu.kind'));assert.notEqual(seen[i],'flor');assert.equal(g.run('campaign.index'),i);
   assert.ok(g.run('difficulty().reaction')<previousReaction);previousReaction=g.run('difficulty().reaction');
   assert.equal(g.run('match.scores[0]'),score);
   g.run('state="playing";match.playerWins=1;finishRound(player,"K.O.")');score=g.run('match.scores[0]');
   assert.ok(score>0);
-  if(i<5){g.tick(.9);assert.notEqual(g.nodes.get('resultKicker').textContent,'GAME OVER');g.key('Space');g.tick(3);assert.equal(g.run('campaign.index'),i);g.key('Space');g.tick(1.9);assert.equal(g.run('state'),'intro');}
+  if(i<6){g.tick(.9);assert.notEqual(g.nodes.get('resultKicker').textContent,'GAME OVER');g.key('Space');g.tick(3);assert.equal(g.run('campaign.index'),i);g.key('Space');g.tick(1.9);assert.equal(g.run('state'),'intro');}
  }
- assert.equal(new Set(seen).size,6);g.tick(2.3);assert.equal(g.nodes.get('resultKicker').textContent,'GAME OVER');
+ assert.equal(new Set(seen).size,7);g.tick(2.3);assert.equal(g.nodes.get('resultKicker').textContent,'GAME OVER');
  assert.equal(g.run('campaign.completed'),true);assert.equal(g.nodes.get('winnerForm').hidden,false);
  assert.equal(g.run('campaign.score'),score);
 });
@@ -1181,7 +1181,32 @@ test('Galante touch smoke is free, crosses the rival, pauses, and retains standa
 test('selection supports vertical grid navigation and random choice for either player',()=>{
  const g=game();g.run('startMode("versus");chooseFighter("sergio",false)');
  g.key('ArrowDown');assert.equal(g.run('playerChoice'),'facu');g.key('ArrowUp');assert.equal(g.run('playerChoice'),'sergio');
- g.run('Math.random=()=>.99;chooseFighter("random",false)');assert.equal(g.run('playerChoice'),'galante');g.run('confirmFighter();Math.random=()=>0;chooseFighter("random",false)');assert.equal(g.run('opponentChoice'),'sergio');
+ g.run('Math.random=()=>.99;chooseFighter("random",false)');assert.equal(g.run('playerChoice'),'padrino');g.run('confirmFighter();Math.random=()=>0;chooseFighter("random",false)');assert.equal(g.run('opponentChoice'),'sergio');
  assert.equal(g.run('stats.galante.height'),g.run('stats.sergio.height'));assert.equal(g.run('stats.galante.size'),g.run('stats.sergio.size'));
  g.run('startGame("blotta","sergio");beginIntro()');assert.equal(g.nodes.get('speechBubble').hidden,true);
+});
+
+test('El Padrino supports both selections, standard poses and a free normal roll on touch',()=>{
+ const g=game();g.run('startMode("versus");chooseFighter("padrino",false);confirmFighter();chooseFighter("padrino",false);confirmFighter();startGame(playerChoice);state="playing"');
+ assert.equal(g.run('player.kind+":"+cpu.kind'),'padrino:padrino');
+ g.run('for(let pose=0;pose<15;pose++)spriteFrame({kind:"padrino",pose});draw();player.power=cpu.power=0;player.specialCooldown=cpu.specialCooldown=4');
+ g.taps[5].listeners.pointerdown({pointerId:91,preventDefault(){}});g.taps2[5].listeners.pointerdown({pointerId:92,preventDefault(){}});
+ assert.equal(g.run('player.action+":"+cpu.action'),'roll:roll');assert.equal(g.run('player.power+cpu.power'),0);
+ assert.equal(g.run('attack(player,"teleport")'),false);g.tick(.2);g.key('Space');const x=g.run('player.x');g.tick(.3);assert.equal(g.run('player.x'),x);
+});
+test('Padrino dachshund flies both ways, hits once, respects guard and uses the supplied bark',()=>{
+ for(const direction of [-1,1])for(const distance of [85,470])for(const guarding of [false,true]){
+  const g=game();g.run(`startGame('padrino','sergio');state='playing';player.power=100;player.x=${direction>0?180:730};cpu.x=player.x+${direction*distance};player.facing=${direction};cpu.facing=${-direction};cpu.guardTime=${guarding?3:0};cpu.guarding=${guarding}`);
+  enableCombatAudio(g);g.key('KeyL');assert.equal(g.run('player.specialStyle'),'dog');assert.equal(g.run('player.power'),65);
+  assert.equal(g.run('combatLog.filter(e=>e.event==="start"&&e.name==="dog").length'),1);
+  g.tick(.22);if(distance>100){assert.equal(g.run('projectiles[0].style'),'dog');assert.equal(g.run('Math.sign(projectiles[0].vx)'),direction);g.run('draw()');}
+  g.tick(1.1);assert.equal(g.run('cpu.health'),guarding?99:87);assert.equal(g.run('projectiles.length'),0);
+  g.tick(.3);assert.equal(g.run('cpu.health'),guarding?99:87);
+  g.run('stopAllCombatSounds()');assert.equal(g.run('combatSounds.size+soundTails.size'),0);
+ }
+});
+test('Padrino bark retains an audible close-hit tail and stops on pause',()=>{
+ const g=game();g.run('startGame("padrino","sergio");state="playing";player.x=300;cpu.x=385');enableCombatAudio(g);g.key('KeyL');g.tick(.25);
+ assert.equal(g.run('cpu.health'),87);assert.equal(g.run('soundTails.size'),1);g.key('Space');assert.equal(g.run('soundTails.size'),0);
+ assert.ok(fs.statSync(path.join(__dirname,'../assets/padrino-bark-v1.wav')).size>10000);
 });

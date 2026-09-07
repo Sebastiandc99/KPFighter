@@ -162,3 +162,10 @@ Arte generado con la herramienta de imágenes integrada. Brief: conservar cara, 
 - Selección simétrica en dos filas de cuatro: siete luchadores y elección al azar. Flechas verticales y horizontales disponibles.
 - Galante basado en la nueva referencia caricaturesca, con la altura y escala de Sergio, uniforme sin marcas, látigo continuo de dos puntas con pinches y nuevo sonido de barrido, chasquido y cola metálica.
 - Arte generado con la herramienta integrada; las poses se normalizan con `scripts/build-galante-assets.cjs SOURCE_SHEET`. Audio reproducible con `python3 scripts/build-whip-audio.py`.
+
+### El Padrino
+- Octavo luchador, disponible para ambos jugadores y como rival del torneo. Controles normales, incluyendo rodada gratuita.
+- Poder: perro salchicha que viaja horizontalmente en la dirección del ataque, con estela naranja; puede bloquearse o esquivarse. Consume la misma energía que los demás poderes.
+- Audio: primer ladrido del archivo proporcionado `Ladrido perro.m4a`, recortado desde 0.445 s durante 0.58 s, normalizado y con salida suave. El impacto cercano conserva medio segundo audible; pausa y salida lo detienen.
+- Arte generado con la herramienta integrada, usando la referencia del usuario: «atlas arcade 4×4 de El Padrino con esmoquin negro, moño, rosa roja, 15 poses completas mirando a la derecha y un perro salchicha volando; fondo magenta uniforme, sin textos ni escenario». Normalización: `node scripts/build-padrino-assets.cjs SOURCE_SHEET`. Los recursos finales están en `assets/padrino-*-v1.webp` y `assets/padrino-bark-v1.wav`.
+- Selección simétrica de ocho personajes en dos filas de cuatro; elección aleatoria debajo. El torneo incluye siete rivales y un último nivel de dificultad progresiva.

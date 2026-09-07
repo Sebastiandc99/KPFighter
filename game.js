@@ -52,6 +52,8 @@ const stageRoster = Object.keys(stages);
 const stageImages = Object.fromEntries(stageRoster.map(key => [key, loadImage(stages[key].src)]));
 
 const assets = {
+  padrino: loadImage("assets/padrino-atlas-v1.webp"),
+  dachshund: loadImage("assets/padrino-dog-v1.webp"),
   galante: loadImage("assets/galante-atlas-v3.webp"),
   kicksA: loadImage("assets/kicks-classic-a-v1.png"),
   kicksB: loadImage("assets/kicks-classic-b-v1.png"),
@@ -70,6 +72,7 @@ const assets = {
 };
 
 const POSES = {
+  padrino: {idle:0, punch:1, kick:2, hit:3, power:4, sweep:5},
   galante: {idle:0, punch:1, kick:2, hit:3, power:4, sweep:5},
   flor: {idle:0, punch:1, kick:2, hit:3, power:4, sweep:5},
   facu: {idle:0, punch:1, kick:2, hit:3, power:4, sweep:5},
@@ -80,6 +83,7 @@ const POSES = {
 };
 
 const stats = {
+  padrino: { name: "EL PADRINO", speed: 263, jump: 605, defaultFace: 1, size: 210, height: 184, width: 27, description: "PERROS SALCHICHA · RODADA", ability: null },
   galante: { name: "GALANTE", speed: 242, jump: 595, defaultFace: 1, size: 210, height: 184, width: 34, description: "LÁTIGO CON PINCHES · EVASIÓN DE HUMO", ability: null },
   flor: { name: "FLOR", speed: 280, jump: 610, defaultFace: 1, size: 199, height: 165, width: 23, description: "BOCHA DE HOCKEY", ability: null },
   facu: { name: "FACU", speed: 276, jump: 615, defaultFace: 1, size: 222, height: 188, width: 25, description: "BIGOTE BOOMERANG", ability: null },
@@ -89,7 +93,7 @@ const stats = {
   marechal: { name: "MARECHAL", speed: 270, jump: 620, defaultFace: 1, size: 242, height: 202, width: 23, description: "ARTES MARCIALES · RAYOS", ability: null }
 };
 
-const roster = ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante"];
+const roster = ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante", "padrino"];
 const FLOOR = 448;
 const STEP = 1 / 120;
 const JUMP_BOOST = 1.25;
@@ -119,6 +123,7 @@ const KO_AUDIO_BASE64 = "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAA
 let koVoice = null;
 
 const COMBAT_AUDIO = {
+  dog: {src: "assets/padrino-bark-v1.wav", volume: 1.15, start: 0, end: .58},
   whip: {src: "assets/whip-v2.wav", volume: 1.35, start: 0, end: .52},
   hockey: {src: "assets/hockey-hit.wav", volume: 1.35, start: 0, end: .8},
   boomerang: {src: "assets/boomerang.wav", volume: 1.1, start: 0, end: 1},
@@ -378,7 +383,8 @@ const DIFFICULTIES = [
  {name:"AVANZADA", reaction:.15, guard:.65, attack:.93, speed:.93, power:.38, tactics:.67},
  {name:"DIFÍCIL", reaction:.12, guard:.73, attack:.96, speed:.96, power:.42, tactics:.75},
  {name:"EXPERTO", reaction:.09, guard:.81, attack:.99, speed:.99, power:.46, tactics:.82},
- {name:"MAESTRO", reaction:.08, guard:.84, attack:1, speed:1, power:.49, tactics:.87}
+ {name:"MAESTRO", reaction:.08, guard:.84, attack:1, speed:1, power:.49, tactics:.87},
+ {name:"LEYENDA", reaction:.07, guard:.86, attack:1, speed:1, power:.51, tactics:.89}
 ];
 function difficulty() { return DIFFICULTIES[campaign && gameMode==="solo" ? Math.min(campaign.index,DIFFICULTIES.length-1) : 3]; }
 function beginGame() {
@@ -960,7 +966,7 @@ function attack(f, type) {
     f.vx = f.vy = 0;
   } else if (type === "special") {
     f.specialSpawned = false;
-    f.specialStyle = f.kind === "galante" ? "whip" : f.kind === "flor" ? "hockey" : f.kind === "facu" ? "boomerang" : f.kind === "sergio" ? (f.projectileToggle++ % 2 ? "bottle" : "meat") : f.kind === "tunki" ? "flowers" : f.kind === "marechal" ? "lightning" : "ki";
+    f.specialStyle = f.kind === "padrino" ? "dog" : f.kind === "galante" ? "whip" : f.kind === "flor" ? "hockey" : f.kind === "facu" ? "boomerang" : f.kind === "sergio" ? (f.projectileToggle++ % 2 ? "bottle" : "meat") : f.kind === "tunki" ? "flowers" : f.kind === "marechal" ? "lightning" : "ki";
     if (COMBAT_AUDIO[f.specialStyle]) f.attackSound = startCombatSound(f.specialStyle);
     f.vx = 0;
   } else if (f.kickStyle === "volley") {
@@ -982,12 +988,12 @@ function attack(f, type) {
 function spawnProjectile(owner, style) {
   if (style === "whip") { strikeWhip(owner); return; }
   if (style === "boomerang") { spawnBoomerang(owner); return; }
-  const config = style === "hockey" ? { speed: 570, damage: 13, radius: 12 } : style === "ki" ? { speed: 470, damage: 13, radius: 16 } :
+  const config = style === "dog" ? { speed: 500, damage: 13, radius: 23 } : style === "hockey" ? { speed: 570, damage: 13, radius: 12 } : style === "ki" ? { speed: 470, damage: 13, radius: 16 } :
     style === "lightning" ? { speed: 560, damage: 13, radius: 15 } :
     style === "flowers" ? { speed: 405, damage: 14, radius: 20 } :
     style === "bottle" ? { speed: 425, damage: 12, radius: 16 } : { speed: 395, damage: 10, radius: 19 };
   const x = owner.x + owner.facing * 58 * FIGHTER_SCALE;
-  const y = owner.y - (style === "hockey" ? 74 : 143) * FIGHTER_SCALE;
+  const y = owner.y - (style === "hockey" ? 74 : style === "dog" ? 111 : 143) * FIGHTER_SCALE;
   addEffect("ring", x, y, powerColor(owner.kind), 36, .22);
   burst(x, y, powerColor(owner.kind), 5);
   const sound = COMBAT_AUDIO[style] ? owner.attackSound || startCombatSound(style) : null;
@@ -995,7 +1001,7 @@ function spawnProjectile(owner, style) {
   projectiles.push({
     sound,
     owner, style, x, y, prevX: x, prevY: y, prevSpin: 0,
-    vx: owner.facing * config.speed, vy: style === "ki" || style === "lightning" || style === "hockey" ? 0 : -42,
+    vx: owner.facing * config.speed, vy: style === "dog" || style === "ki" || style === "lightning" || style === "hockey" ? 0 : -42,
     damage: config.damage, radius: config.radius * FIGHTER_SCALE, life: 2.5, spin: 0, trailTime: 0, trail: []
   });
 }
@@ -1007,7 +1013,7 @@ function updateProjectiles(dt) {
     p.life -= dt;
     p.x += p.vx * dt;
     p.spin += dt * 8;
-    if (p.style !== "ki" && p.style !== "lightning" && p.style !== "hockey") { p.vy += 82 * dt; p.y += p.vy * dt; }
+    if (p.style !== "dog" && p.style !== "ki" && p.style !== "lightning" && p.style !== "hockey") { p.vy += 82 * dt; p.y += p.vy * dt; }
     p.trailTime -= dt;
     if (p.trailTime <= 0) {
       p.trail.unshift({ x: p.x, y: p.y });
@@ -1324,7 +1330,7 @@ function updateParticles(dt) {
 }
 
 function powerColor(kind) {
-  return { galante: "#ffdb43", flor: "#d7ff99", facu: "#ffe47a", sergio: "#ffc650", blotta: "#76daff", tunki: "#ff8bd5", marechal: "#a5eaff" }[kind];
+  return { padrino: "#ff902e", galante: "#ffdb43", flor: "#d7ff99", facu: "#ffe47a", sergio: "#ffc650", blotta: "#76daff", tunki: "#ff8bd5", marechal: "#a5eaff" }[kind];
 }
 
 function addEffect(type, x, y, color, radius, life) {
@@ -1446,6 +1452,7 @@ function poseFor(f) {
   if (f.kind === "flor" && f.lowAttack && f.action === "kick") return POSES.flor.sweep;
   if (f.kind === "facu" && f.lowAttack && f.action === "kick") return POSES.facu.sweep;
   if (f.kind === "marechal" && f.lowAttack && f.action === "kick") return POSES.marechal.sweep;
+  if (f.kind === "padrino" && f.lowAttack && f.action === "kick") return POSES.padrino.sweep;
   if (f.kind === "galante" && f.lowAttack) return POSES.galante.sweep;
   if (f.lowAttack) return f.kind === "blotta" && f.action === "kick" ? POSES.blotta.sweep : 8;
   if (f.action === "punch") {
@@ -1456,6 +1463,7 @@ function poseFor(f) {
     if (progress < .15) return POSES[f.kind].idle;
     if (f.kind === "blotta") return POSES.blotta.power;
     if (f.kind === "tunki") return POSES.tunki.power;
+    if (f.kind === "padrino") return POSES.padrino.power;
     if (f.kind === "galante") return POSES.galante.power;
     if (f.kind === "flor") return POSES.flor.power;
     if (f.kind === "facu") return POSES.facu.power;
@@ -1714,7 +1722,7 @@ function drawMotionLines(f, motion) {
 }
 
 function spriteFrame(frame) {
-  if(frame.kind === "galante") return galanteSpriteFrame(frame);
+  if(["galante", "padrino"].includes(frame.kind)) return atlasSpriteFrame(frame);
   if(frame.pose===13 || frame.pose===14)return classicKickFrame(frame);
   if (frame.kind === "flor") return florSpriteFrame(frame);
   if (frame.kind === "facu") return facuSpriteFrame(frame);
@@ -1998,8 +2006,12 @@ function drawProjectile(p) {
   ctx.save();
   ctx.translate(lerp(p.prevX, p.x, renderAlpha), lerp(p.prevY, p.y, renderAlpha));
   ctx.scale(FIGHTER_SCALE, FIGHTER_SCALE);
-  ctx.rotate(p.style === "ki" || p.style === "lightning" ? 0 : lerp(p.prevSpin, p.spin, renderAlpha) * Math.sign(p.vx));
-  if (p.style === "hockey") {
+  ctx.rotate(p.style === "dog" || p.style === "ki" || p.style === "lightning" ? 0 : lerp(p.prevSpin, p.spin, renderAlpha) * Math.sign(p.vx));
+  if (p.style === "dog") {
+    ctx.scale(Math.sign(p.vx) || 1, 1);
+    ctx.shadowColor = "#ff902e"; ctx.shadowBlur = 8 * drawingScale;
+    if (assets.dachshund.complete && assets.dachshund.naturalWidth) ctx.drawImage(assets.dachshund, -39, -19, 78, 38);
+  } else if (p.style === "hockey") {
     ctx.shadowColor = "#d8ff82"; ctx.shadowBlur = 9 * drawingScale;
     ctx.fillStyle = "#8994aa"; ctx.beginPath(); ctx.arc(0,0,12,0,Math.PI*2); ctx.fill();
     ctx.fillStyle = "#fafbff"; ctx.beginPath(); ctx.arc(-2,-2,10,0,Math.PI*2); ctx.fill();
@@ -2253,7 +2265,7 @@ function disconnectCombatVoice(voice) {
 function stopCombatSound(voice, immediate = false) {
   if (!voice) return;
   combatSounds.delete(voice);
-  const minAudible = ["lightning", "meat", "flowers", "boomerang", "hockey", "whip"].includes(voice.name) ? .08 : 0;
+  const minAudible = voice.name === "dog" ? .5 : ["lightning", "meat", "flowers", "boomerang", "hockey", "whip"].includes(voice.name) ? .08 : 0;
   const heard = voice.audibleAt === null ? 0 : Math.max(0, (audioCtx?.currentTime ?? voice.elapsed) - voice.audibleAt);
   if (!immediate && voice.source && minAudible > heard && !muted && state === "playing") {
     // At point-blank range retain only a short attack transient, never the whole clip.
@@ -2522,7 +2534,7 @@ window.addEventListener("keydown", event => {
     const offsets={KeyA:-1,ArrowLeft:-1,KeyD:1,ArrowRight:1,KeyW:-4,ArrowUp:-4,KeyS:4,ArrowDown:4};
     if (code in offsets) {
       const selected = selectionPlayer === 2 ? opponentChoice : playerChoice;
-      const choices=[...roster,"random"];
+      const choices=roster;
       chooseFighter(choices[(roster.indexOf(selected)+offsets[code]+choices.length)%choices.length]);
     }
     if (["Enter", "Space", "KeyJ", "Numpad1"].includes(code)) confirmFighter();
@@ -2599,11 +2611,11 @@ syncViewport();
 if (window.location?.search && new URLSearchParams(window.location.search).has("ranking")) showRanking();
 requestAnimationFrame(loop);
 
-// All Galante poses share one shaded atlas, including movement and eating.
-function galanteSpriteFrame(frame) {
-  const key='galante:'+frame.pose;
+// Generated 4x4 atlases share normalized cells for attacks and movement.
+function atlasSpriteFrame(frame) {
+  const key=frame.kind+':'+frame.pose;
   if(spriteFrames.has(key)) return spriteFrames.get(key);
-  const image=assets.galante;
+  const image=assets[frame.kind];
   if(!image.complete || !image.naturalWidth) return null;
   const surface=document.createElement('canvas');surface.width=surface.height=270;
   const paint=surface.getContext('2d');paint.imageSmoothingEnabled=false;
