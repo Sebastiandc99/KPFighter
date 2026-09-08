@@ -16,7 +16,11 @@ const spriteFrames = new Map();
 const poseBlendSurfaces = new Map();
 let drawingScale = 1;
 
+let online = null;
+let onlineSoundId = 0;
+
 const ui = {
+  onlineScreen: document.getElementById("onlineScreen"),
   titleScreen: document.getElementById("titleScreen"),
   modeScreen: document.getElementById("modeScreen"),
   rankingScreen: document.getElementById("rankingScreen"),
@@ -243,11 +247,14 @@ function clearHeld() {
   document.querySelectorAll("[data-hold].active").forEach(button => button.classList.remove("active"));
 }
 
-function humanFighter(f) { return f.isPlayer || gameMode === "versus"; }
+function humanFighter(f) { return f.isPlayer || gameMode === "versus" || !!online?.active; }
 function fighterInput(f) { return f === cpu ? held2 : held; }
-function fighterLabel(f) { return (f === player ? "1P" : gameMode === "versus" ? "2P" : "CPU") + " · " + stats[f.kind].name; }
+function fighterLabel(f) { return (f === player ? "1P" : gameMode === "versus" || online?.active ? "2P" : "CPU") + " · " + stats[f.kind].name; }
 
 function mainMenu() {
+  if (online) online.leave();
+  document.body.classList.remove("online-mode");
+  ui.confirmBtn.disabled = false;
   stopRoundVoice(); stopAllCombatSounds();
   clearHeld();
   campaign = null;
@@ -290,6 +297,7 @@ function startMode(mode) {
 }
 
 function confirmFighter() {
+  if (online?.active) { online.confirm(); return; }
   if (gameMode === "versus" && selectionPlayer === 1) {
     selectionPlayer = 2;
     chooseFighter(opponentChoice, false);
@@ -297,6 +305,7 @@ function confirmFighter() {
 }
 
 function backFromFighters() {
+  if (online?.active) { mainMenu(); return; }
   if (gameMode === "versus" && selectionPlayer === 2) { selectionPlayer = 1; chooseFighter(playerChoice, false); }
   else openModeSelection();
 }
@@ -324,12 +333,13 @@ function makeFighter(kind, x, isPlayer) {
 }
 
 function showScreen(screen) {
-  [ui.titleScreen, ui.modeScreen, ui.selectScreen, ui.stageScreen, ui.gameScreen, ui.rankingScreen].forEach(node => {
+  [ui.titleScreen, ui.modeScreen, ui.selectScreen, ui.stageScreen, ui.gameScreen, ui.rankingScreen, ui.onlineScreen].forEach(node => {
     node.classList.toggle("active", node === screen);
   });
 }
 
 function chooseFighter(kind, playSound = true) {
+  if (online?.active && online.ready) return;
   if(kind === "random") kind=roster[Math.floor(Math.random()*roster.length)];
   if (!stats[kind]) return;
   if (selectionPlayer === 2) opponentChoice = kind;
@@ -338,7 +348,7 @@ function chooseFighter(kind, playSound = true) {
   document.getElementById("selectionPrompt").textContent = "JUGADOR " + selectionPlayer + " · ELIGE TU LUCHADOR";
   document.querySelectorAll(".p1-arrow small").forEach(node => { node.textContent = selectionPlayer + "P"; });
   ui.selectScreen.classList.toggle("selecting-p2", selectionPlayer === 2);
-  ui.confirmBtn.textContent = gameMode === "versus" && selectionPlayer === 1 ? "CONFIRMAR JUGADOR 1" : "ELEGIR ESCENARIO";
+  ui.confirmBtn.textContent = online?.active ? "CONFIRMAR PERSONAJE" : gameMode === "versus" && selectionPlayer === 1 ? "CONFIRMAR JUGADOR 1" : "ELEGIR ESCENARIO";
   document.querySelectorAll("[data-pick]").forEach(button => {
     button.classList.toggle("selected", button.dataset.pick === kind);
     button.setAttribute("aria-pressed", String(button.dataset.pick === kind));
@@ -348,6 +358,7 @@ function chooseFighter(kind, playSound = true) {
   document.querySelectorAll("[data-portrait]").forEach(portrait => {
     portrait.classList.toggle("selected", portrait.dataset.portrait === kind);
   });
+  if (online?.active) online.choose(kind);
   if (playSound) sfx("move");
 }
 
@@ -420,7 +431,7 @@ function startGame(choice, opponentKind = null, keepCampaign = false) {
   const opponents = roster.filter(kind => kind !== choice);
   match = { round: 1, playerWins: 0, cpuWins: 0, complete: false, repeat: false, scores: [keepCampaign ? campaign.score : 0, 0], campaignRun: keepCampaign, winner: null, saved: false, saving: false,
     id: globalThis.crypto?.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2),
-    playerKind: choice, cpuKind: gameMode === "versus" ? (stats[opponentKind] ? opponentKind : opponentChoice) : opponents.includes(opponentKind) ? opponentKind : opponents[Math.floor(Math.random() * opponents.length)] };
+    playerKind: choice, cpuKind: gameMode === "versus" || online?.active ? (stats[opponentKind] ? opponentKind : opponentChoice) : opponents.includes(opponentKind) ? opponentKind : opponents[Math.floor(Math.random() * opponents.length)] };
   selectMusic();
   startRound();
 }
@@ -453,7 +464,7 @@ function startRound() {
   document.getElementById("roundNotice").hidden = true;
   ui.leftName.textContent = stats[player.kind].name;
   ui.rightName.textContent = stats[cpu.kind].name;
-  document.getElementById("rightRole").textContent = gameMode === "versus" ? "2P" : "CPU";
+  document.getElementById("rightRole").textContent = gameMode === "versus" || online?.active ? "2P" : "CPU";
   document.getElementById("touchControls2").hidden = gameMode !== "versus";
   document.body.classList.toggle("versus-mode", gameMode === "versus");
   const ability2 = stats[cpu.kind].ability;
@@ -481,6 +492,7 @@ function startRound() {
   ensureAudio();
   syncMusic();
   sfx("start");
+  if (online?.active) configureOnlineControls();
 }
 
 function beginIntro() {
@@ -505,6 +517,7 @@ function positionSpeech() {
 }
 
 function update(dt) {
+  if (online?.guest && online.started) { updateOnlineGuest(dt); return; }
   if (["title", "mode", "select", "stage", "intro", "playing", "roundOver"].includes(state)) advanceMusic(dt);
   if (!["intro", "playing", "roundOver", "finished"].includes(state)) return;
   fighters.forEach(f => {
@@ -594,7 +607,7 @@ function update(dt) {
     if (f.action === "idle" || f.action === "block") f.facing = other.x >= f.x ? 1 : -1;
   });
   updatePlayer(dt);
-  if (gameMode === "versus") updateHuman(cpu, held2);
+  if (gameMode === "versus" || online?.active) updateHuman(cpu, held2);
   else if (aiEnabled) updateAI(dt);
   fighters.forEach(f => updateFighter(f, dt));
   separateFighters();
@@ -1165,9 +1178,10 @@ function addScore(f, points) {
 function showGameOver() {
   match.endShown = true;
   ui.resultKicker.textContent = "GAME OVER";
-  const humanWinner = match.campaignRun || match.winner === 0 || gameMode === "versus";
+  if (online?.active) document.getElementById("onlineEndActions").hidden = false;
+  const humanWinner = online?.active ? match.winner === (online.guest ? 1 : 0) : match.campaignRun || match.winner === 0 || gameMode === "versus";
   document.getElementById("winnerForm").hidden = !humanWinner;
-  document.getElementById("cpuResultNote").hidden = humanWinner;
+  document.getElementById("cpuResultNote").hidden = humanWinner || !!online?.active;
   if (humanWinner) {
     const input = document.getElementById("winnerName");
     input.value = "";
@@ -1210,7 +1224,7 @@ async function saveWinner(event) {
   result.saving = true; button.disabled = true; message.textContent = "Guardando puntaje…";
   try {
     await rankingFetch(RANKING_API, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({
-      id: result.id, name, score: result.scores[result.recordSlot ?? result.winner], mode: gameMode,
+      id: result.id, name, score: result.scores[result.recordSlot ?? result.winner], mode: gameMode === "online" ? "versus" : gameMode,
       character: (result.recordSlot ?? result.winner) === 0 ? result.playerKind : result.cpuKind
     })});
     result.saved = true;
@@ -1221,6 +1235,7 @@ async function saveWinner(event) {
 }
 
 async function showRanking(highlight = null) {
+  if (online?.active) online.leave(false);
   const requestId = ++rankingRequest;
   state = "ranking";
   clearHeld(); stopAllCombatSounds(); stopRoundVoice(); stopMusic();
@@ -2178,7 +2193,8 @@ function setPauseUI(paused) {
   document.getElementById("pauseHelp").hidden = !paused;
 }
 
-function togglePause() {
+function togglePause(remote = false) {
+  if (online?.active && remote !== true) { online.pause(state !== "paused"); return; }
   if (state === "playing" || state === "intro" || state === "roundOver" || (state === "finished" && match.nextOpponent)) {
     pauseFrom = state;
     state = "paused";
@@ -2218,7 +2234,7 @@ function loop(now) {
     update(STEP);
     accumulator -= STEP;
   }
-  renderAlpha = state === "paused" ? 1 : accumulator / STEP;
+  renderAlpha = online?.guest ? Math.min(1, (performance.now()-online.lastFrame)/online.renderInterval) : state === "paused" ? 1 : accumulator / STEP;
   if (["intro", "playing", "paused", "roundOver", "finished"].includes(state)) {
     if (state !== "paused") draw();
     updateHud();
@@ -2275,6 +2291,8 @@ function loadCombatAudio(name) {
 
 function startCombatSound(name) {
   const voice = { name, elapsed: 0, source: null, gain: null, audibleAt: null };
+  voice.netId = ++onlineSoundId;
+  online?.audio("combat", name, voice.netId);
   combatSounds.add(voice);
   ensureAudio();
   syncCombatSounds();
@@ -2293,6 +2311,7 @@ function disconnectCombatVoice(voice) {
 
 function stopCombatSound(voice, immediate = false) {
   if (!voice) return;
+  online?.audio("stop", voice.name, voice.netId);
   combatSounds.delete(voice);
   const minAudible = ["critical", "crash"].includes(voice.name) ? .4 : voice.name === "water" ? .4 : voice.name === "dog" ? .5 : ["lightning", "meat", "flowers", "boomerang", "hockey", "whip"].includes(voice.name) ? .08 : 0;
   const heard = voice.audibleAt === null ? 0 : Math.max(0, (audioCtx?.currentTime ?? voice.elapsed) - voice.audibleAt);
@@ -2479,6 +2498,7 @@ function tone(freq, duration, type = "square", volume = .045, slide = 0) {
 }
 
 function sfx(name) {
+  online?.audio("sfx", name);
   if (muted || state === "paused") return;
   const generation = soundGeneration;
   const later = (callback, delay) => setTimeout(() => { if (generation === soundGeneration) callback(); }, delay);
@@ -2543,15 +2563,21 @@ function keyBinding(code) {
 }
 function refreshHeld() {
   [held,held2].forEach((input,index) => {
+    if (index === 1 && online?.active) return;
     Object.keys(input).forEach(action => {
       input[action] = [...keyHolds].some(code => { const b = keyBinding(code); return b.slot === index + 1 && b.hold === action; })
         || [...touchHolds.values()].some(value => (value.slot || 1) === index + 1 && (value.action || value) === action);
     });
   });
 }
-function refreshHumans() { updatePlayer(); if (cpu && gameMode === "versus") updateHuman(cpu, held2); }
-function performAction(action, slot = 1) {
-  if (state !== "playing" || (slot === 2 && gameMode !== "versus")) return;
+function refreshHumans() {
+  if (online?.active) online.input(held);
+  if (online?.guest) return;
+  updatePlayer(); if (cpu && (gameMode === "versus" || online?.active)) updateHuman(cpu, held2);
+}
+function performAction(action, slot = 1, remote = false) {
+  if (online?.active && !remote) { if (slot !== 1) return; online.input(held, action); if (online.guest) return; }
+  if (state !== "playing" || (slot === 2 && gameMode !== "versus" && !online?.active)) return;
   const f = slot === 2 ? cpu : player;
   if (!f) return;
   refreshHumans();
@@ -2609,10 +2635,12 @@ window.addEventListener("keydown", event => {
 window.addEventListener("keyup", event => {
   const code = event.code || (event.key.length === 1 ? "Key" + event.key.toUpperCase() : event.key);
   keyHolds.delete(code); refreshHeld();
+  if (online?.active) online.input(held);
   if (state === "playing") refreshHumans();
 });
 function pauseOnLeave() {
   clearHeld();
+  if (online?.active) { online.input(held); return; }
   if (state === "playing" || state === "intro" || state === "roundOver" || (state === "finished" && match.nextOpponent)) togglePause();
 }
 window.addEventListener("blur", pauseOnLeave);
@@ -2629,6 +2657,7 @@ document.querySelectorAll("[data-hold]").forEach(btn => {
   });
   const release = event => {
     touchHolds.delete(event.pointerId); refreshHeld();
+    if (online?.active) online.input(held);
     if (state === "playing") refreshHumans();
     btn.classList.toggle("active", [...touchHolds.values()].some(v => v.slot === slot && v.action === btn.dataset.hold));
   };

@@ -1042,3 +1042,25 @@ button, .name-row strong, .choice-tile strong, .stage-card strong { font-weight:
 .choice-tile[data-pick="jairo"] img { object-fit: contain; object-position: center; background: #142341; }
 .select-screen .choice-tile img { aspect-ratio: 1; }
 .select-screen .choice-tile strong { font-size: clamp(8px, 1.1cqw, 15px); }
+
+/* Online keeps the existing single-player touch layout on each device. */
+.title-online { display: block; margin: 1.1cqw auto 0; font-size: clamp(12px, 2cqw, 25px); }
+.online-mode-btn { margin: 1.2cqw auto 0; }
+.online-card { inset: 5% 8%; width: auto; padding: 2cqw; gap: 2%; }
+.online-card h2 { margin: .3em 0 .7em; }
+.online-options { display: flex; justify-content: center; gap: 1.3cqw; }
+.online-join label { display: block; margin: 1.3cqw 0 .5cqw; }
+.online-join > div { display: flex; gap: 1cqw; justify-content: center; }
+#roomInput { width: 7em; min-width: 0; text-transform: uppercase; font: inherit; font-size: clamp(18px, 3cqw, 36px); letter-spacing: .14em; padding: .25em; text-align: center; color: #ffe083; background: #101b34; border: 2px solid #d4deeb; }
+#roomDetails p { margin: 1cqw 0 .3cqw; }
+#roomCode { display: block; margin: .2cqw 0 .7cqw; font: 400 clamp(28px, 5cqw, 65px)/1 var(--pixel-font); color: #ffe16f; letter-spacing: .14em; }
+.online-message { min-height: 2em; margin: 1cqw auto; max-width: 35em; color: #a7eaff; font-size: clamp(12px, 1.8cqw, 22px); }
+.online-rival { position: absolute; z-index: 12; top: 34.8%; left: 42%; width: 54%; margin: 0; text-align: center; color: #abf7c4; text-shadow: 2px 2px #081126; font-size: clamp(10px, 1.4cqw, 19px); }
+.online-status { position: absolute; z-index: 16; top: 13.5%; left: 28%; width: 44%; margin: 0; text-align: center; color: #b7f0ff; text-shadow: 1px 2px #001020; font-size: clamp(9px, 1.4cqw, 18px); pointer-events: none; }
+body:not(.online-mode) #onlineRival, body:not(.online-mode) #onlineStatus, body:not(.online-mode) #onlineEndActions { display: none; }
+#onlineEndActions { display: flex; justify-content: center; gap: 1cqw; margin-top: 1cqw; }
+.online-mode .versus-help { display: none; }
+.online-mode .solo-help { display: inline; }
+.online-mode .choice-tile[disabled] { opacity: .8; }
+.online-card button:disabled { opacity: .55; }
+@media (max-height: 500px) { .online-card { padding: 1cqw; } .online-card h2 { margin: .1em 0 .4em; } .online-message { margin: .5cqw auto; } }

@@ -8,7 +8,7 @@
   <title>KP FIGHTER</title>
   <link rel="preload" href="assets/fonts/Bangers-Regular.woff" as="font" type="font/woff" crossorigin>
   <link rel="preload" href="assets/fonts/VT323-Regular.woff" as="font" type="font/woff" crossorigin>
-  <link rel="stylesheet" href="style.css?v=20260908a">
+  <link rel="stylesheet" href="style.css?v=20260908b">
 </head>
 <body>
   <main id="arcade" class="arcade" aria-label="KP Fighter">
@@ -19,6 +19,7 @@
         <p class="title-super">ARCADE</p>
         <h1 id="gameTitle"><span>KP</span> FIGHTER</h1>
         <button id="startBtn" class="start-btn" type="button">PRESIONA START</button>
+        <button id="titleOnlineBtn" class="arcade-btn title-online" type="button">JUGAR ONLINE</button>
         <button id="titleRankingBtn" class="arcade-btn title-ranking" type="button">RANKING</button>
         <p class="title-credit">1–2 JUGADORES · ARCADE EDITION</p>
       </div>
@@ -32,8 +33,21 @@
           <button id="soloBtn" data-mode="solo" class="mode-option selected" type="button"><strong>1 JUGADOR</strong><span>TORNEO INDIVIDUAL</span></button>
           <button id="versusBtn" data-mode="versus" class="mode-option" type="button"><strong>2 JUGADORES</strong><span>Duelo en la misma pantalla</span></button>
         </div>
+        <button id="onlineBtn" class="arcade-btn online-mode-btn" type="button">JUGAR ONLINE</button>
         <p class="mode-note">En celular: controles para ambos lados · En PC: un teclado</p>
         <button id="modeBackBtn" class="arcade-btn" type="button">MENÚ PRINCIPAL</button>
+      </div>
+    </section>
+
+    <section id="onlineScreen" class="screen menu-screen" aria-labelledby="onlineTitle">
+      <div class="menu-card online-card">
+        <p class="menu-kicker">KP FIGHTER · DOS DISPOSITIVOS</p>
+        <h2 id="onlineTitle">JUGAR ONLINE</h2>
+        <div id="onlineOptions" class="online-options"><button id="createRoomBtn" class="arcade-btn primary" type="button">CREAR SALA</button><button id="joinRoomBtn" class="arcade-btn" type="button">UNIRSE A SALA</button></div>
+        <form id="joinRoomForm" class="online-join" hidden><label for="roomInput">CÓDIGO DE SALA</label><div><input id="roomInput" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="KP7X92" required><button id="connectRoomBtn" class="arcade-btn primary" type="submit">CONECTAR</button></div></form>
+        <div id="roomDetails" hidden><p>COMPARTÍ ESTE CÓDIGO</p><strong id="roomCode"></strong><button id="copyRoomBtn" class="arcade-btn" type="button">COPIAR CÓDIGO</button></div>
+        <p id="onlineMessage" class="online-message" role="status" aria-live="polite">Creá una sala o ingresá el código de tu rival.</p>
+        <button id="onlineBackBtn" class="arcade-btn" type="button">MENÚ PRINCIPAL</button>
       </div>
     </section>
 
@@ -72,6 +86,7 @@
         <p id="selectionMoves">PANZAZO · ASADO · FERNET</p>
       </div>
 
+      <p id="onlineRival" class="online-rival" hidden></p>
       <div class="choice-dock" role="group" aria-label="Elegir luchador">
         <p class="choose-label">CHOOSE YOUR FIGHTER</p>
         <div class="choice-row">
@@ -160,6 +175,7 @@
           <div id="rightRounds" class="round-wins"><i></i><i></i></div>
         </div>
       </div>
+      <p id="onlineStatus" class="online-status" hidden></p>
       <div id="campaignStatus" class="campaign-status" hidden></div>
       <div id="roundLabel" class="round-label">ROUND 1 · AL MEJOR DE 3</div>
       <p id="roundNotice" class="round-notice" hidden></p>
@@ -186,6 +202,7 @@
           <div class="name-entry"><input id="winnerName" name="winnerName" maxlength="20" autocomplete="nickname" placeholder="Tu nombre" required><button id="saveScoreBtn" class="arcade-btn primary" type="submit">GUARDAR</button></div>
           <p id="saveError" class="form-message" role="status"></p>
         </form>
+        <div id="onlineEndActions" hidden><button id="onlineEndMenuBtn" class="arcade-btn" type="button">MENÚ PRINCIPAL</button><button id="onlineEndRankingBtn" class="arcade-btn" type="button">VER RANKING</button></div>
         <p id="cpuResultNote" class="cpu-result-note" hidden>La máquina ganó. A continuación, el ranking.</p>
       </div>
 
@@ -248,6 +265,9 @@
     <div class="scanlines" aria-hidden="true"></div>
   </main>
 
-  <script src="game.js?v=20260908a"></script>
+  <script src="online-config.js?v=20260908b"></script>
+  <script src="online.js?v=20260908b"></script>
+  <script src="game.js?v=20260908b"></script>
+  <script src="online-game.js?v=20260908b"></script>
 </body>
 </html>
