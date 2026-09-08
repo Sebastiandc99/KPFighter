@@ -181,3 +181,5 @@ Noveno personaje seleccionable para ambos jugadores y rival del torneo. Controle
 Audio extraído del archivo MP4 suministrado: desde 1.90 s, duración 1.20 s, fundidos breves y volumen de poder. Conserva un mínimo audible de 0.4 s en impactos cercanos.
 Arte generado con la herramienta integrada y las dos referencias del usuario: «Paula alta y delgada, pelo negro largo, camisa blanca abierta con detalles azules, camiseta negra, pantalón azul, cinturón de herramientas y botas; atlas arcade 4×4 con 16 poses completas, fondo magenta, sin textos ni escenario; agua dibujada por el motor». Recursos: `assets/paula-atlas-v1.webp`, `assets/paula-portrait-v1.webp`, `assets/paula-water-v1.mp3`. Normalización: `node scripts/build-paula-assets.cjs SOURCE_SHEET`.
 La selección usa una cuadrícula 3×3; flechas arriba/abajo avanzan una fila. Torneo de ocho rivales con dificultad progresiva.
+
+Agua v2: chorro con cuerpo translúcido, espuma longitudinal y gotas dispersas. Audio original de 2.5 s desde 1.90 s, filtrado suave y menor volumen; reproducción única sin bucle y salida gradual de 180 ms al impactar.

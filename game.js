@@ -126,7 +126,7 @@ const KO_AUDIO_BASE64 = "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAA
 let koVoice = null;
 
 const COMBAT_AUDIO = {
-  water: {src: "assets/paula-water-v1.mp3", volume: 1.2, start: 0, end: 1.2},
+  water: {src: "assets/paula-water-v2.mp3", volume: .85, start: 0, end: 2.5, loop: false},
   dog: {src: "assets/padrino-bark-v1.wav", volume: 1.15, start: 0, end: .58},
   whip: {src: "assets/whip-v2.wav", volume: 1.35, start: 0, end: .52},
   hockey: {src: "assets/hockey-hit.wav", volume: 1.35, start: 0, end: .8},
@@ -2284,6 +2284,14 @@ function stopCombatSound(voice, immediate = false) {
   combatSounds.delete(voice);
   const minAudible = voice.name === "water" ? .4 : voice.name === "dog" ? .5 : ["lightning", "meat", "flowers", "boomerang", "hockey", "whip"].includes(voice.name) ? .08 : 0;
   const heard = voice.audibleAt === null ? 0 : Math.max(0, (audioCtx?.currentTime ?? voice.elapsed) - voice.audibleAt);
+  if (voice.name === "water" && !immediate && voice.source && !muted && state === "playing") {
+    const now=audioCtx.currentTime ?? 0,fadeStart=now+Math.max(0,.4-heard),end=fadeStart+.18;
+    soundTails.add(voice);voice.source.loop=false;
+    voice.gain?.gain.setValueAtTime?.(voice.gain.gain.value,fadeStart);
+    voice.gain?.gain.linearRampToValueAtTime?.(0,end);
+    voice.source.onended=()=>{soundTails.delete(voice);disconnectCombatVoice(voice);};
+    voice.source.stop(end);return;
+  }
   if (!immediate && voice.source && minAudible > heard && !muted && state === "playing") {
     // At point-blank range retain only a short attack transient, never the whole clip.
     soundTails.add(voice);
@@ -2321,11 +2329,12 @@ function syncCombatSounds() {
   for (const voice of combatSounds) {
     const cue = COMBAT_AUDIO[voice.name];
     if (voice.source || !cue.buffer) continue;
+    if (cue.loop === false && voice.elapsed >= Math.min(cue.end ?? cue.buffer.duration,cue.buffer.duration)-cue.start) continue;
     const source = audioCtx.createBufferSource();
     const gain = audioCtx.createGain();
     source.buffer = cue.buffer;
     // Loops cover long flights. The owning attack ends the sound, never a timeout.
-    source.loop = true;
+    source.loop = cue.loop !== false;
     source.loopStart = cue.start;
     source.loopEnd = Math.min(cue.end ?? cue.buffer.duration, cue.buffer.duration);
     gain.gain.value = cue.volume;
@@ -2333,7 +2342,7 @@ function syncCombatSounds() {
     voice.source = source;
     voice.gain = gain;
     voice.audibleAt = audioCtx.currentTime ?? voice.elapsed;
-    source.start(0, cue.start + voice.elapsed % (source.loopEnd - cue.start));
+    source.start(0, cue.start + (cue.loop === false ? voice.elapsed : voice.elapsed % (source.loopEnd - cue.start)));
   }
 }
 
@@ -2715,30 +2724,40 @@ function drawWhipSpike(size) {
 }
 
 
-// The water front travels through the arena; braided streams connect it to the casting hands.
+// A tapered body of moving water, foam streaks and dispersed spray.
 function drawWaterJet(p) {
-  const direction=Math.sign(p.vx),frontX=lerp(p.prevX,p.x,renderAlpha),frontY=lerp(p.prevY,p.y,renderAlpha);
-  const handX=lerp(p.owner.prevX,p.owner.x,renderAlpha)+direction*58*FIGHTER_SCALE;
-  const handY=lerp(p.owner.prevY,p.owner.y,renderAlpha)-143*FIGHTER_SCALE;
-  const length=Math.max(0,(frontX-handX)*direction),steps=Math.max(8,Math.ceil(length/12));
-  ctx.save();ctx.lineCap="round";ctx.lineJoin="round";
-  for(const [width,color] of [[21,"rgba(15,115,239,.48)"],[10,"#188eea"],[4,"#b9f5ff"],[1.5,"#ffffff"]]){
-    ctx.lineWidth=width*FIGHTER_SCALE;
-    for(let strand=0;strand<3;strand++){
-      ctx.strokeStyle=color;ctx.beginPath();
-      for(let i=0;i<=steps;i++){
-        const t=i/steps,amplitude=Math.sin(Math.PI*t)*16+3;
-        const x=handX+direction*length*t,y=lerp(handY,frontY,t)+Math.sin(t*16-stageTime*23+strand*2.1)*amplitude;
-        if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
-      }ctx.stroke();
-    }
+  const dir=Math.sign(p.vx),fx=lerp(p.prevX,p.x,renderAlpha),fy=lerp(p.prevY,p.y,renderAlpha);
+  const hx=lerp(p.owner.prevX,p.owner.x,renderAlpha)+dir*58*FIGHTER_SCALE;
+  const hy=lerp(p.owner.prevY,p.owner.y,renderAlpha)-143*FIGHTER_SCALE;
+  const length=Math.max(1,(fx-hx)*dir),steps=Math.max(12,Math.ceil(length/8));
+  const center=t=>lerp(hy,fy,t)+Math.sin(t*12-stageTime*18)*3*t;
+  const radius=t=>(5+14*Math.sqrt(t))*(.88+.12*Math.sin(t*31-stageTime*26));
+  ctx.save();ctx.lineCap="round";
+  const fill=ctx.createLinearGradient(hx,hy-20,hx,hy+20);
+  fill.addColorStop(0,"rgba(156,239,255,.72)");fill.addColorStop(.4,"rgba(36,170,235,.88)");fill.addColorStop(1,"rgba(12,91,194,.45)");ctx.fillStyle=fill;
+  ctx.beginPath();
+  for(let i=0;i<=steps;i++){const t=i/steps,x=hx+dir*length*t,y=center(t)-radius(t);i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+  for(let i=steps;i>=0;i--){const t=i/steps;ctx.lineTo(hx+dir*length*t,center(t)+radius(t));}ctx.closePath();ctx.fill();
+  // Short longitudinal highlights travel outward rather than rotating like a beam.
+  for(let i=0;i<28;i++){
+    const t=(i*.137+stageTime*(1.1+i%3*.13))%1,back=Math.max(0,t-.04-(i%4)*.012);
+    const offset=Math.sin(i*8.1)*radius(t)*.78;
+    ctx.strokeStyle=i%3?"rgba(210,250,255,.78)":"#ffffff";ctx.lineWidth=i%4===0?2.6:1.3;
+    ctx.beginPath();ctx.moveTo(hx+dir*length*back,center(back)+offset);ctx.lineTo(hx+dir*length*t,center(t)+offset);ctx.stroke();
   }
-  ctx.fillStyle="#d7faff";
-  for(let i=0;i<13;i++){
-    const t=(i/13+stageTime*.8)%1;
-    ctx.beginPath();ctx.ellipse(handX+direction*length*t,lerp(handY,frontY,t)+Math.sin(i*4.7+stageTime*16)*29,3.5,1.8,direction*.5,0,Math.PI*2);ctx.fill();
+  for(let i=0;i<25;i++){
+    const phase=(stageTime*1.8+i*.173)%1,t=.15+.85*phase;
+    const spread=(i%2?1:-1)*(radius(t)+4+(i%5)*2)*phase;
+    ctx.fillStyle=i%3?"rgba(162,230,255,.75)":"#efffff";
+    ctx.beginPath();ctx.ellipse(hx+dir*length*t,center(t)+spread,1.3+(i%3),.8+(i%2),dir*.2,0,Math.PI*2);ctx.fill();
   }
-  ctx.strokeStyle="#f0fdff";ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(frontX,frontY,12,24,0,0,Math.PI*2);ctx.stroke();ctx.restore();
+  // Uneven foamy front and outward spray, without a rigid circular outline.
+  for(let i=0;i<12;i++){
+    const a=i*2.4+stageTime*5,r=5+(i%4)*4;
+    ctx.fillStyle=i%2?"rgba(233,253,255,.88)":"rgba(93,199,248,.78)";
+    ctx.beginPath();ctx.ellipse(fx+Math.cos(a)*r*.5,fy+Math.sin(a)*r,4+i%3,2+i%4,a,0,Math.PI*2);ctx.fill();
+  }
+  ctx.restore();
 }
 function drawWaterCharge(f) {
   if(f.action!=="special" || f.specialSpawned)return;

@@ -1256,3 +1256,11 @@ test('water flight and sound pause together and jumping can evade the stream',()
  g.key('KeyL');g.tick(.3);const x=g.run('projectiles[0].x');g.key('Space');g.tick(.4);assert.equal(g.run('projectiles[0].x'),x);assert.equal(g.run('projectiles[0].sound.source'),null);
  g.key('Space');g.run('jump(cpu)');g.tick(.65);assert.equal(g.run('cpu.health'),100);g.run('mainMenu()');assert.equal(g.run('combatSounds.size+soundTails.size'),0);
 });
+
+test('water audio plays once, fades on impact and never loops after a late resume',()=>{
+ const g=game();g.run('startGame("paula","sergio");state="playing";player.x=300;cpu.x=385');enableCombatAudio(g);
+ g.run('audioCtx.currentTime=0');g.key('KeyL');assert.equal(g.run('player.attackSound.source.loop'),false);
+ g.run('var waterFade=[];player.attackSound.gain.gain.setValueAtTime=(v,t)=>waterFade.push([v,t]);player.attackSound.gain.gain.linearRampToValueAtTime=(v,t)=>waterFade.push([v,t])');
+ g.tick(.3);assert.equal(g.run('waterFade.at(-1)[0]'),0);assert.ok(g.run('waterFade.at(-1)[1]>=.18'));g.run('stopAllCombatSounds()');assert.equal(g.run('soundTails.size'),0);
+ g.run('var endedWater={name:"water",elapsed:4,source:null};combatSounds.add(endedWater);syncCombatSounds()');assert.equal(g.run('endedWater.source'),null);
+});
