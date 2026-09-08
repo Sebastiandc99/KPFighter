@@ -89,6 +89,7 @@ online=new window.KPOnline(window.KP_ONLINE_CONFIG,{
  remoteInput:h=>{Object.assign(held2,h);if(cpu)updateHuman(cpu,held2);},
  remoteAction:action=>performAction(action,2,true),
  pause:wanted=>{if((state==='paused')!==wanted)togglePause(true);},
+ advance:t=>{if(t-lastTime>=80){advanceGameClock(t);updateHud();}},
  validKind:kind=>Object.hasOwn(stats,kind),capture:captureOnlineFrame,validFrame:validOnlineFrame,apply:applyOnlineFrame,sound:onlineSound,
  disconnected:text=>{
   if(state==='finished'&&match.complete){onlineEl('onlineStatus').textContent=text;return;}

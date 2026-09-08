@@ -75,3 +75,11 @@ test('all character powers, projectiles and effects serialize without shared eng
   assert.equal(p.guest.run('projectiles.length'),p.host.run('projectiles.length'));
  }
 });
+
+test('host clock continues without animation frames and guest power indicator uses its own fighter',()=>{
+ const p=pair();p.start('sergio','jairo');p.host.run('state="playing";lastTime=0;performance.now=()=>100');
+ const before=p.host.run('roundTime');p.host.run('online.tick()');assert.ok(p.host.run('roundTime')<before);
+ const after=p.host.run('roundTime');p.host.run('loop(100)');assert.equal(p.host.run('roundTime'),after);
+ p.host.run('player.power=0;cpu.power=100;cpu.specialCooldown=0;updateHud()');p.frame();
+ assert.equal(p.guest.taps[3].classList.contains('ready'),true);assert.equal(p.host.taps[3].classList.contains('ready'),false);
+});

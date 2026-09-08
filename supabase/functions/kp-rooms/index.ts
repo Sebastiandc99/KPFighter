@@ -1,14 +1,21 @@
 // Public room bootstrap with rate limits. Room access uses verified, short-lived Auth JWTs.
 // The service key exists only in Supabase's server environment.
 const url = Deno.env.get('SUPABASE_URL')!;
-const adminKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+const adminKey = JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS') || '{}').default || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const anonKey = JSON.parse(Deno.env.get('SUPABASE_PUBLISHABLE_KEYS') || '{}').default || Deno.env.get('SUPABASE_ANON_KEY');
+const browserKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBhaWRhbGFvanJrcGxua3VjbXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg4Nzc4NjQsImV4cCI6MjEwNDQ1Mzg2NH0.sfOvTWmVzFDFMDjG24UxK3jJDJc99FispoQE1p00Z8M";
 const origin = 'https://sebastiandc99.github.io';
 const cors = {'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'authorization, apikey, content-type', 'Access-Control-Allow-Methods':'POST, OPTIONS', 'Cache-Control':'no-store'};
 const reply = (data: unknown, status=200) => new Response(JSON.stringify(data), {status,headers:{...cors,'Content-Type':'application/json'}});
 async function api(path:string, method='GET', body?:unknown, token=adminKey) {
- const r=await fetch(url+path,{method,headers:{apikey:anonKey,Authorization:'Bearer '+token,'Content-Type':'application/json',Prefer:'return=representation'},body:body===undefined?undefined:JSON.stringify(body)});
- const data=await r.json().catch(()=>null);if(!r.ok)throw new Error('upstream');return data;
+ if(!url || !adminKey || !anonKey)throw new Error('KPR-CONFIG');
+ const key=token===adminKey?adminKey:anonKey;
+ const headers:Record<string,string>={apikey:key,'Content-Type':'application/json',Prefer:'return=representation'};
+ if(!token.startsWith('sb_'))headers.Authorization='Bearer '+token;
+ const r=await fetch(url+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
+ const data=await r.json().catch(()=>null);
+ if(!r.ok){const step=path.includes('rate_limit')?'LIMIT':path.includes('cleanup')?'CLEANUP':path.includes('/admin/')?'PLAYER':path.includes('/token')?'SESSION':path.includes('/user')?'AUTH':'ROOM';throw new Error('KPR-'+step+'-'+r.status);}
+ return data;
 }
 async function limit(req:Request, action:string) {
  const ip=req.headers.get('cf-connecting-ip') || req.headers.get('x-real-ip') || req.headers.get('x-forwarded-for')?.split(',').at(-1)?.trim() || 'unknown';
@@ -21,7 +28,7 @@ Deno.serve(async(req:Request)=>{
  if(req.method!=='POST')return reply({error:'Método no permitido.'},405);
  if(req.headers.get('origin') && req.headers.get('origin')!==origin)return reply({error:'Origen no permitido.'},403);
  // Public API key authorizes only room bootstrap, never table access or administration.
- if(req.headers.get('apikey')!==anonKey)return reply({error:'Aplicación no autorizada.'},401);
+ if(![anonKey,browserKey].includes(req.headers.get('apikey')||'') && ![anonKey,browserKey].includes((req.headers.get('authorization')||'').replace(/^Bearer /,'')))return reply({error:'Aplicación no autorizada.'},401);
  if(Number(req.headers.get('content-length')||0)>2048)return reply({error:'Solicitud inválida.'},400);
  let createdUser:string|null=null;
  try {
@@ -61,8 +68,9 @@ Deno.serve(async(req:Request)=>{
   } else room=(await api('/rest/v1/rpc/kp_online_join','POST',{p_code:code,p_user:user.id}))[0];
   if(!room){await api('/auth/v1/admin/users/'+user.id,'DELETE');createdUser=null;return reply({error:'La sala ya tiene dos jugadores o dejó de estar disponible.'},409);}
   return reply({id:room.id,code:room.code,role:body.action==='create'?'host':'guest',expires:room.expires_at,token:session.access_token});
- } catch(_) {
+ } catch(error) {
   if(createdUser)await api('/auth/v1/admin/users/'+createdUser,'DELETE').catch(()=>{});
-  return reply({error:'No se pudo conectar con las salas. Volvé a intentar.'},503);
+  const code=error instanceof Error && /^KPR-[A-Z]+(?:-[0-9]{3})?$/.test(error.message)?error.message:'KPR-CONNECTION';
+  return reply({error:'No se pudo conectar con las salas. Volvé a intentar. ('+code+')'},503);
  }
 });

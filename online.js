@@ -37,7 +37,7 @@
    this.leave(false);const gen=++this.generation;this.status('Conectando…');this.a.busy(true);
    let allocated;
    try{
-    const response=await fetch(this.config.url+'/functions/v1/kp-rooms',{method:'POST',headers:{apikey:this.config.key,Authorization:'Bearer '+this.config.key,'Content-Type':'application/json'},body:JSON.stringify({action,code,version:1}),signal:AbortSignal.timeout(18000)});
+    const response=await fetch(this.config.url+'/functions/v1/kp-rooms',{method:'POST',headers:{apikey:this.config.key,'Content-Type':'application/json'},body:JSON.stringify({action,code,version:1}),signal:AbortSignal.timeout(18000)});
     const data=await response.json();if(!response.ok)throw Error(data.error||'No se pudo conectar.');allocated=data;
     if(gen!==this.generation){this.closeRoom(data);return;}
     this.room=data;this.active=true;this.started=false;this.peer=false;this.ready=false;this.remoteReady=false;this.kind='sergio';this.remoteKind='blotta';this.seq=0;this.lastFrame=0;this.lastInputSeq=0;this.inputSeq=0;this.actionId=0;this.ack=0;this.actions=[];this.holds=cleanHold({});this.events=[];this.eventId=0;this.lastEvent=0;this.snapshotId=0;this.remoteSnapshot=0;this.inputAt=now();this.born=now();this.lastPeer=now();this.lastHello=0;this.lastInput=0;this.lastPing=0;this.lastSnapshot=0;this.pauseCommand=null;this.pauseSeq=0;this.remotePauseSeq=0;
@@ -73,6 +73,7 @@
   sendFrame(){if(!this.started||this.guest)return;this.send({type:'frame',seq:++this.snapshotId,ack:this.ack,pauseAck:this.remotePauseSeq,frame:this.a.capture(),events:this.events});this.lastSnapshot=now();}
   tick(){
    if(!this.active)return;const t=now();
+   if(!this.guest&&this.started)this.a.advance?.(t);
    if(Date.parse(this.room.expires)<Date.now()){this.fail('La sala venció. Creá una nueva para seguir jugando.');return;}
    if(this.direct&&t-this.lastPeer>1800)this.direct=false;
    if(this.peer&&t-this.lastPeer>8000){this.fail('Rival desconectado. Podés volver al menú principal.');return;}

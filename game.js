@@ -2179,8 +2179,10 @@ function updateHud() {
   document.getElementById("campaignStatus").textContent=campaign ? "RIVAL "+(campaign.index+1)+"/"+campaign.opponents.length+" · "+difficulty().name+" · PUNTOS ×"+(1+campaign.index*.25) : "";
   document.querySelectorAll("#leftRounds i").forEach((dot, index) => dot.classList.toggle("won", index < match.playerWins));
   document.querySelectorAll("#rightRounds i").forEach((dot, index) => dot.classList.toggle("won", index < match.cpuWins));
-  document.querySelector('[data-tap="special"]').classList.toggle("ready", player.power >= 35 && player.specialCooldown === 0 && !player.mustacheAway);
-  ui.abilityBtn.classList.toggle("ready", player.power >= 30 && player.specialCooldown === 0);
+  const controlled = online?.guest ? cpu : player;
+  const powerCost = controlled.kind === "jairo" && held.down ? 45 : 35;
+  document.querySelector('[data-tap="special"]').classList.toggle("ready", controlled.power >= powerCost && controlled.specialCooldown === 0 && !controlled.mustacheAway);
+  ui.abilityBtn.classList.toggle("ready", controlled.power >= 30 && controlled.specialCooldown === 0);
   document.getElementById("abilityBtn2").classList.toggle("ready", cpu.power >= 30 && cpu.specialCooldown === 0);
 }
 
@@ -2226,7 +2228,8 @@ function togglePause(remote = false) {
   }
 }
 
-function loop(now) {
+function advanceGameClock(now) {
+  now = Math.max(lastTime, now);
   const dt = Math.max(0, Math.min(.1, (now - lastTime) / 1000));
   lastTime = now;
   accumulator += dt;
@@ -2234,6 +2237,10 @@ function loop(now) {
     update(STEP);
     accumulator -= STEP;
   }
+}
+
+function loop(now) {
+  advanceGameClock(now);
   renderAlpha = online?.guest ? Math.min(1, (performance.now()-online.lastFrame)/online.renderInterval) : state === "paused" ? 1 : accumulator / STEP;
   if (["intro", "playing", "paused", "roundOver", "finished"].includes(state)) {
     if (state !== "paused") draw();
