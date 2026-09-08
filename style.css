@@ -1015,11 +1015,11 @@ button, .name-row strong, .choice-tile strong, .stage-card strong { font-weight:
 .portrait-galante img { object-fit: contain; object-position: center bottom; filter: drop-shadow(4px 6px 2px rgba(0,0,0,.5)); }
 .choice-tile[data-pick="galante"] img { object-fit: contain; object-position: center; background: #142341; }
 
-/* Symmetric nine-fighter roster. */
+/* Symmetric ten-fighter roster. */
 .select-screen .choice-dock, .phone-portrait .select-screen .choice-dock {
-  left: 72%; top: 37%; bottom: auto; width: 30%;
+  left: 69%; top: 39%; bottom: auto; width: 54%;
 }
-.choice-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(5px, 1cqw, 13px); width: 100%; }
+.choice-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: clamp(4px, .65cqw, 9px); width: 100%; }
 .select-screen .choice-tile, .phone-portrait .select-screen .choice-tile { width: 100%; min-width: 0; }
 .choice-tile.selected { transform: none; }
 .select-screen .confirm-btn { margin-top: 5%; font-size: clamp(10px, 1.7cqw, 22px); }
@@ -1036,3 +1036,9 @@ button, .name-row strong, .choice-tile strong, .stage-card strong { font-weight:
 .portrait-paula { left: 7%; border: 0; background: transparent; box-shadow: none; }
 .portrait-paula img { object-fit: contain; object-position: center bottom; filter: drop-shadow(4px 6px 2px rgba(0,0,0,.5)); }
 .choice-tile[data-pick="paula"] img { object-fit: contain; object-position: center; background: #142341; }
+
+.portrait-jairo { left: 7%; border: 0; background: transparent; box-shadow: none; }
+.portrait-jairo img { object-fit: contain; object-position: center bottom; filter: drop-shadow(4px 6px 2px rgba(0,0,0,.5)); }
+.choice-tile[data-pick="jairo"] img { object-fit: contain; object-position: center; background: #142341; }
+.select-screen .choice-tile img { aspect-ratio: 1; }
+.select-screen .choice-tile strong { font-size: clamp(8px, 1.1cqw, 15px); }

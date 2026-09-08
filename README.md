@@ -183,3 +183,10 @@ Arte generado con la herramienta integrada y las dos referencias del usuario: «
 La selección usa una cuadrícula 3×3; flechas arriba/abajo avanzan una fila. Torneo de ocho rivales con dificultad progresiva.
 
 Agua v2: chorro con cuerpo translúcido, espuma longitudinal y gotas dispersas. Audio original de 2.5 s desde 1.90 s, filtrado suave y menor volumen; reproducción única sin bucle y salida gradual de 180 ms al impactar.
+
+### Jairo · 20260908a
+- Décimo luchador: campera acolchada oscura, capucha bordó, lentes y planos en el cinturón. Selección simétrica de dos filas de cinco.
+- Controles básicos y rodada normal. **Poder** (J1: L; J2: 9 / numérico 3) proyecta la línea roja: 11 de daño y bloqueo de 0,62 s si conecta sin guardia; cuesta 35 de energía.
+- **Abajo + Poder** (J1: S + L; J2: ↓ + 9 / numérico 3; celular: mantener ↓ y tocar Poder) hace caer cuatro barras sobre la posición del rival al lanzar el ataque. Cuesta 45 de energía y puede esquivarse o cubrirse de pie. Los poderes no muestran nombres al ejecutarse.
+- Dos efectos de sonido originales, con pausa y silencio sincronizados. Generación reproducible: `python scripts/build-jairo-audio.py` (requiere ffmpeg).
+- Arte generado con la herramienta integrada de imágenes a partir de la referencia de Jairo; normalización: `node scripts/build-jairo-assets.cjs SOURCE_SHEET`. Recursos: `assets/jairo-atlas-v1.webp` y `assets/jairo-portrait-v1.webp`.
