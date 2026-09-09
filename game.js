@@ -91,17 +91,26 @@ const POSES = {
 };
 
 const stats = {
-  jairo: { name: "JAIRO", speed: 272, jump: 615, defaultFace: 1, size: 226, height: 198, width: 25, description: "PODER: LÍNEA ROJA · ↓ + PODER: BARRAS", ability: null },
-  paula: { name: "PAULA", speed: 275, jump: 620, defaultFace: 1, size: 220, height: 194, width: 24, description: "HYDRO BLAST · CHORRO DE AGUA", ability: null },
-  padrino: { name: "EL PADRINO", speed: 263, jump: 605, defaultFace: 1, size: 210, height: 184, width: 27, description: "PERROS SALCHICHA · RODADA", ability: null },
-  galante: { name: "GALANTE", speed: 242, jump: 595, defaultFace: 1, size: 210, height: 184, width: 34, description: "LÁTIGO CON PINCHES · EVASIÓN DE HUMO", ability: null },
-  flor: { name: "FLOR", speed: 280, jump: 610, defaultFace: 1, size: 199, height: 165, width: 23, description: "BOCHA DE HOCKEY", ability: null },
-  facu: { name: "FACU", speed: 276, jump: 615, defaultFace: 1, size: 222, height: 188, width: 25, description: "BIGOTE BOOMERANG", ability: null },
-  sergio: { name: "SERGIO", speed: 260, jump: 595, defaultFace: 1, size: 210, height: 184, width: 32, description: "PANZAZO · ASADO · FERNET", ability: null },
-  blotta: { name: "BLOTTA", speed: 278, jump: 620, defaultFace: -1, size: 214, height: 180, width: 25, description: "KARATE · ENERGÍA · HUMO", ability: "teleport" },
-  tunki: { name: "LA TUNKI", speed: 246, jump: 605, defaultFace: 1, size: 202, height: 174, width: 32, description: "FLORES · SALTO APLASTANTE", ability: "slam" },
-  marechal: { name: "MARECHAL", speed: 270, jump: 620, defaultFace: 1, size: 242, height: 202, width: 23, description: "ARTES MARCIALES · RAYOS", ability: null }
+  jairo: { name: "JAIRO", normalDamage: 8, resistance: 98, powerDamage: 26, agility: 7, speed: 274, jump: 615, defaultFace: 1, size: 226, height: 198, width: 25, description: "PODER: LÍNEA ROJA · ↓ + PODER: BARRAS", ability: null },
+  paula: { name: "PAULA", normalDamage: 8, resistance: 92, powerDamage: 27, agility: 7, speed: 274, jump: 620, defaultFace: 1, size: 220, height: 194, width: 24, description: "HYDRO BLAST · CHORRO DE AGUA", ability: null },
+  padrino: { name: "EL PADRINO", normalDamage: 9, resistance: 102, powerDamage: 25, agility: 6, speed: 262, jump: 605, defaultFace: 1, size: 210, height: 184, width: 27, description: "PERROS SALCHICHA · RODADA", ability: null },
+  galante: { name: "GALANTE", normalDamage: 8, resistance: 120, powerDamage: 23, agility: 3, speed: 226, jump: 595, defaultFace: 1, size: 210, height: 184, width: 34, description: "LÁTIGO CON PINCHES · EVASIÓN DE HUMO", ability: null },
+  flor: { name: "FLOR", normalDamage: 10, resistance: 92, powerDamage: 24, agility: 9, speed: 298, jump: 610, defaultFace: 1, size: 199, height: 165, width: 23, description: "BOCHA DE HOCKEY", ability: null },
+  facu: { name: "FACU", normalDamage: 9, resistance: 95, powerDamage: 25, agility: 8, speed: 286, jump: 615, defaultFace: 1, size: 222, height: 188, width: 25, description: "BIGOTE BOOMERANG", ability: null },
+  sergio: { name: "SERGIO", normalDamage: 10, resistance: 116, powerDamage: 22, agility: 4, speed: 238, jump: 595, defaultFace: 1, size: 210, height: 184, width: 32, description: "PANZAZO · ASADO · FERNET", ability: null },
+  blotta: { name: "BLOTTA", normalDamage: 11, resistance: 90, powerDamage: 24, agility: 9, speed: 298, jump: 620, defaultFace: -1, size: 214, height: 180, width: 25, description: "KARATE · ENERGÍA · HUMO", ability: "teleport" },
+  tunki: { name: "LA TUNKI", normalDamage: 8, resistance: 122, powerDamage: 25, agility: 2, speed: 214, jump: 605, defaultFace: 1, size: 202, height: 174, width: 32, description: "FLORES · SALTO APLASTANTE", ability: "slam" },
+  marechal: { name: "MARECHAL", normalDamage: 8, resistance: 88, powerDamage: 28, agility: 7, speed: 274, jump: 620, defaultFace: 1, size: 242, height: 202, width: 23, description: "ARTES MARCIALES · RAYOS", ability: null }
 };
+
+// Reference strong hit 10 maps to the existing 5-point uppercut; bars stay normalized.
+const powerDamage = f => stats[f.kind].powerDamage * .5;
+const mobilityTempo = f => .82 + stats[f.kind].agility * .035;
+const damageTaken = (f, damage) => Math.round(damage * 100000 / stats[f.kind].resistance) / 1000;
+function timedMove(f, spec, evasion=false) {
+  const tempo=mobilityTempo(f);
+  return {...spec, startup:spec.startup/(evasion?tempo:1), active:spec.active/(evasion?tempo:1), recovery:spec.recovery/tempo};
+}
 
 const roster = ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante", "padrino", "paula", "jairo"];
 const FLOOR = 448;
@@ -722,7 +731,7 @@ function updateAI(dt) {
 
 function integrateBody(f, dt) {
   const wasOnFloor = f.grounded;
-  if (!f.grounded) f.vy += 1650 * dt;
+  if (!f.grounded) f.vy += 1650 * (f.action === "slam" ? 1 : mobilityTempo(f) ** 2) * dt;
   const other=f===player?cpu:player;
   f.x = Math.max(FIGHTER_LEFT, other.x-MAX_FIGHTER_DISTANCE,
     Math.min(FIGHTER_RIGHT, other.x+MAX_FIGHTER_DISTANCE, f.x + f.vx * dt));
@@ -740,7 +749,7 @@ function integrateBody(f, dt) {
       addEffect("ground", f.x, FLOOR + 2, "#e4c38a", 44, .28);
       if (f.action === "slam") {
         f.slamLanded = true;
-        f.actionTime = f.actionDuration = .33;
+        f.actionTime = f.actionDuration = MOVES.slam.recovery / mobilityTempo(f);
         f.vx *= .15;
         f.landingSquash = .22;
         screenShake = 7;
@@ -766,8 +775,8 @@ function updateFighter(f, dt) {
   }
   if (f.action === "roll") {
     const elapsed=f.actionDuration-f.actionTime;
-    f.vx=elapsed < .36 ? f.rollDirection*580 : 0;
-    if(elapsed < .34) f.invuln=Math.max(f.invuln,.02);
+    f.vx=elapsed < .36 / mobilityTempo(f) ? f.rollDirection*580*mobilityTempo(f) : 0;
+    if(elapsed < .34 / mobilityTempo(f)) f.invuln=Math.max(f.invuln,.02);
     if(Math.floor(elapsed*30)!==Math.floor((elapsed+dt)*30))dustBurst(f.x,FLOOR,2);
   }
   if (f.action === "teleport") f.vx = f.vy = 0;
@@ -802,12 +811,12 @@ function updateFighter(f, dt) {
       spawnProjectile(f, f.specialStyle);
     }
     if (f.action === "teleport") {
-      if (elapsed >= .10 && !f.teleportSmokeStarted) {
+      if (elapsed >= .10 / mobilityTempo(f) && !f.teleportSmokeStarted) {
         f.teleportSmokeStarted = true;
         smokeBurst(f.x, FLOOR - 70, 20);
         addEffect("ring", f.x, FLOOR - 80, "#b9a8ff", 60, .32);
       }
-      if (elapsed >= .31 && !f.teleportDone) {
+      if (elapsed >= .31 / mobilityTempo(f) && !f.teleportDone) {
         f.teleportDone = true;
         const direction = f.teleportDirection;
         let destination = direction ? f.x + direction * 235 : other.x + (f.x < other.x ? 110 : -110);
@@ -866,7 +875,7 @@ function overlaps(a, b) {
 function isVanished(f) {
   if (f.action !== "teleport") return false;
   const elapsed = f.actionDuration - f.actionTime;
-  return elapsed >= .16 && elapsed < .45;
+  return elapsed >= .16 / mobilityTempo(f) && elapsed < .45 / mobilityTempo(f);
 }
 
 function attackContact(f, target) {
@@ -884,7 +893,7 @@ function attackContact(f, target) {
   const box = { left: Math.min(f.x, front), right: Math.max(f.x, front), top: centerY - thickness, bottom: centerY + thickness };
   if (!overlaps(box, hurtBox(target))) return null;
   return {
-    attacker: f, target, damage: spec.damage + (f.kind === "sergio" && f.action === "punch" ? 2 : 0),
+    attacker: f, target, damage: (spec.damage + (f.kind === "sergio" && f.action === "punch" ? 2 : 0)) * stats[f.kind].normalDamage / 10,
     knock: spec.knock, lift: rising ? spec.lift : diagonal ? 0 : f.airAttack ? -120 : 0, direction: f.facing, low, overhead: diagonal,
     sourceX: f.x, projectile: false, x: (front + target.x) / 2, y: centerY
   };
@@ -892,12 +901,12 @@ function attackContact(f, target) {
 
 function slamContact(f, target) {
   if (f.attackLanded || !f.slamDiving || isVanished(target) || target.invuln > 0) return null;
-  if (f.slamLanded && f.actionTime < .24) return null;
+  if (f.slamLanded && f.actionTime < .24 / mobilityTempo(f)) return null;
   const radius = (f.slamLanded ? 100 : 49) * FIGHTER_SCALE;
   const box = { left: f.x - radius, right: f.x + radius, top: f.y - 65 * FIGHTER_SCALE, bottom: f.y + 5 };
   if (!overlaps(box, hurtBox(target))) return null;
   const direction = Math.sign(target.x - f.x) || f.facing;
-  return { attacker: f, target, damage: MOVES.slam.damage, knock: MOVES.slam.knock, lift: -180,
+  return { attacker: f, target, damage: powerDamage(f) * 1.4, knock: MOVES.slam.knock, lift: -180,
     direction, sourceX: f.x, low: false, overhead: true, projectile: false, x: target.x, y: Math.min(f.y, target.y - 80) };
 }
 
@@ -930,7 +939,7 @@ function jump(f) {
     return false;
   }
   f.crouching = f.guarding = false;
-  f.vy = -stats[f.kind].jump * JUMP_BOOST;
+  f.vy = -stats[f.kind].jump * JUMP_BOOST * mobilityTempo(f);
   f.vx = f.moveIntent * stats[f.kind].speed * .92;
   f.grounded = false;
   dustBurst(f.x, FLOOR, 4);
@@ -966,6 +975,8 @@ function attack(f, type) {
   const directionInput=humanFighter(f) ? Number(fighterInput(f).right)-Number(fighterInput(f).left) : f.moveIntent;
   f.kickStyle=type!=="kick" || low ? null : !f.grounded ? "airKick" : directionInput*f.facing<0 ? "volley" : null;
   f.moveSpec = f.kind === "jairo" && type === "special" ? {...MOVES.special, startup:crash?.32:.22, active:.05, recovery:crash?.62:.42} : f.kind === "paula" && type === "special" ? {...MOVES.special, startup:.24, active:.06, recovery:.70} : MOVES[f.kickStyle || (low && type === "kick" ? "lowKick" : type)];
+  f.moveSpec = timedMove(f, f.moveSpec, ["roll","teleport"].includes(type));
+  if(f.kind === "padrino" && type === "special") f.moveSpec.startup = .28;
   f.action = type;
   f.actionDuration = f.moveSpec.startup + f.moveSpec.active + f.moveSpec.recovery;
   f.actionTime = f.actionDuration;
@@ -982,7 +993,7 @@ function attack(f, type) {
     const other=f===player?cpu:player;
     const input=humanFighter(f)?Number(fighterInput(f).right)-Number(fighterInput(f).left):0;
     f.rollDirection=f.x<FIGHTER_LEFT+88?1:f.x>FIGHTER_RIGHT-88?-1:input || Math.sign(other.x-f.x) || f.facing;
-    f.invuln=Math.max(f.invuln,.34);f.vx=f.rollDirection*580;
+    f.invuln=Math.max(f.invuln,.34/mobilityTempo(f));f.vx=f.rollDirection*580*mobilityTempo(f);
   } else if (type === "slam") {
     f.slamLaunched = f.slamDiving = f.slamLanded = false;
     f.slamFromAir = !f.grounded;
@@ -1000,7 +1011,7 @@ function attack(f, type) {
   } else if (f.kickStyle === "volley") {
     f.vx=-f.facing*65;
   } else if (type === "kick" && !low && f.grounded) {
-    f.vy = -260;
+    f.vy = -260 * mobilityTempo(f);
     f.vx = f.facing * 260;
     f.grounded = false;
     f.airAttack = true;
@@ -1031,7 +1042,7 @@ function spawnProjectile(owner, style) {
     sound,
     owner, style, x, y, prevX: x, prevY: y, prevSpin: 0,
     vx: owner.facing * config.speed, vy: style === "water" || style === "dog" || style === "ki" || style === "lightning" || style === "hockey" ? 0 : -42,
-    damage: config.damage, radius: config.radius * FIGHTER_SCALE, life: 2.5, spin: 0, trailTime: 0, trail: []
+    damage: powerDamage(owner) * (owner.kind === "sergio" ? style === "bottle" ? 12/11 : style === "meat" ? 10/11 : 1 : 1), radius: config.radius * FIGHTER_SCALE, life: 2.5, spin: 0, trailTime: 0, trail: []
   });
 }
 
@@ -1075,6 +1086,7 @@ function updateProjectiles(dt) {
 
 function hit(target, damage, knockX, knockY, attacker, contact = {}) {
   if (target.invuln > 0 || isVanished(target) || state !== "playing") return false;
+  damage = damageTaken(target, damage);
   const sourceX = contact.sourceX ?? attacker.x;
   const inFront = (sourceX - target.x) * target.facing >= 0;
   const blocking = target.guarding && target.grounded && inFront && (!contact.low || target.crouching)
@@ -1082,7 +1094,7 @@ function hit(target, damage, knockX, knockY, attacker, contact = {}) {
     && ["idle", "block"].includes(target.action);
   if (blocking) {
     addScore(target, 25);
-    target.health = Math.max(0, target.health - (contact.projectile ? 1 : 0));
+    target.health = Math.max(0, Math.round((target.health - (contact.projectile ? damageTaken(target,1) : 0)) * 1000) / 1000);
     target.power = Math.min(100, target.power + 4);
     target.action = "block";
     target.actionDuration = .15;
@@ -1097,7 +1109,7 @@ function hit(target, damage, knockX, knockY, attacker, contact = {}) {
   } else {
     stopFighterSound(target);
     addScore(attacker, Math.min(damage, target.health) * 10);
-    target.health = Math.max(0, target.health - damage);
+    target.health = Math.max(0, Math.round((target.health - damage) * 1000) / 1000);
     target.power = Math.min(100, target.power + damage * .8);
     attacker.power = Math.min(100, attacker.power + damage * .7);
     attacker.combo = attacker.comboTime > 0 ? attacker.combo + 1 : 1;
@@ -1927,7 +1939,7 @@ function spawnBoomerang(owner) {
   const mouth=facuMouth(owner),sound=owner.attackSound || startCombatSound("boomerang");
   owner.attackSound=null;owner.mustacheAway=true;
   projectiles.push({owner,style:"boomerang",sound,x:mouth.x,y:mouth.y,prevX:mouth.x,prevY:mouth.y,
-    vx:owner.facing*500,vy:0,damage:13,radius:19,life:4,age:0,returning:false,contactDone:false,
+    vx:owner.facing*500,vy:0,damage:powerDamage(owner),radius:19,life:6,age:0,returning:false,contactDone:false,
     spin:0,prevSpin:0,trailTime:0,trail:[]});
 }
 function catchBoomerang(p) {
@@ -1937,13 +1949,14 @@ function catchBoomerang(p) {
 function updateBoomerang(p,dt) {
   p.age+=dt;p.life-=dt;p.spin+=dt*18;
   const mouth=facuMouth(p.owner);
-  if(!p.returning && (p.age>=.62 || p.x-p.radius<=STAGE_LEFT || p.x+p.radius>=STAGE_RIGHT))p.returning=true;
+  const edge=p.vx<0?Math.max(STAGE_LEFT,cameraX)+p.radius:Math.min(STAGE_RIGHT,cameraX+VIEW_WIDTH)-p.radius;
+  if(!p.returning && (p.vx<0?p.x<=edge:p.x>=edge))p.returning=true;
   if(p.returning){
     const dx=mouth.x-p.x,dy=mouth.y-p.y,distance=Math.hypot(dx,dy),speed=690;
     if(distance<=speed*dt+8 || p.life<=0){catchBoomerang(p);return;}
     p.vx=dx/distance*speed;p.vy=dy/distance*speed;
   }
-  p.x+=p.vx*dt;p.y+=p.vy*dt;
+  p.x=p.returning?p.x+p.vx*dt:p.vx<0?Math.max(edge,p.x+p.vx*dt):Math.min(edge,p.x+p.vx*dt);p.y+=p.vy*dt;
   p.trailTime-=dt;
   if(p.trailTime<=0){p.trail.unshift({x:p.x,y:p.y});if(p.trail.length>9)p.trail.pop();p.trailTime=.025;}
   const target=p.owner===player?cpu:player;
@@ -1991,7 +2004,7 @@ function drawFighter(f) {
   const flashing = f.flash > 0 && Math.floor(f.flash * 40) % 2 === 0;
   let opacity = flashing ? .55 : 1;
   if (f.action === "teleport") {
-    const elapsed = f.actionDuration - f.actionTime;
+    const elapsed = (f.actionDuration - f.actionTime) * mobilityTempo(f);
     opacity *= elapsed < .16 ? 1 - elapsed / .16 : elapsed < .45 ? 0 : Math.min(1, (elapsed - .45) / .18);
   }
   drawSpriteFrame(frame, opacity);
@@ -2732,7 +2745,7 @@ function updateSchedule(p,dt) {
     p.x=Math.max(STAGE_LEFT,Math.min(STAGE_RIGHT,p.originX+p.direction*p.age*2200));
     const box={left:Math.min(p.originX,p.x),right:Math.max(p.originX,p.x),top:p.y-12,bottom:p.y+12};
     if(!p.hitTarget && overlaps(box,hurtBox(target)) && target.invuln<=0 && !isVanished(target)) {
-      p.hitTarget=hit(target,11,p.direction*45,0,p.owner,{sourceX:p.originX,direction:p.direction,projectile:true,x:target.x,y:p.y});
+      p.hitTarget=hit(target,powerDamage(p.owner),p.direction*45,0,p.owner,{sourceX:p.originX,direction:p.direction,projectile:true,x:target.x,y:p.y});
       if(p.hitTarget && target.action==="hit" && state==="playing") {
         target.actionTime=target.actionDuration=.62;target.vx=0;
       }
@@ -2743,7 +2756,7 @@ function updateSchedule(p,dt) {
       const previousY=bar.y;bar.y+=1050*dt;
       const box={left:bar.x-bar.width/2,right:bar.x+bar.width/2,top:previousY-12,bottom:bar.y+12};
       if(target.invuln<=0 && !isVanished(target) && overlaps(box,hurtBox(target))) {
-        hit(target,5,p.direction*55,0,p.owner,{sourceX:p.originX,direction:p.direction,projectile:true,overhead:true,x:bar.x,y:bar.y});
+        hit(target,powerDamage(p.owner)*1.35/4,p.direction*55,0,p.owner,{sourceX:p.originX,direction:p.direction,projectile:true,overhead:true,x:bar.x,y:bar.y});
         bar.done=true;burst(bar.x,bar.y,bar.color,9);
         if(state!=="playing")return;
       } else if(bar.y>=FLOOR) {bar.done=true;burst(bar.x,FLOOR,bar.color,6);}
@@ -2791,7 +2804,7 @@ function strikeWhip(owner) {
   owner.whipEnd={x,y};
   const box={left:Math.min(owner.x,x),right:Math.max(owner.x,x),top:y-14,bottom:y+14};
   if(target.invuln<=0 && !isVanished(target) && overlaps(box,hurtBox(target))) {
-    hit(target,13,owner.facing*230,0,owner,{direction:owner.facing,sourceX:owner.x,projectile:true,low:false,x:target.x,y});
+    hit(target,powerDamage(owner),owner.facing*230,0,owner,{direction:owner.facing,sourceX:owner.x,projectile:true,low:false,x:target.x,y});
   }
 }
 

@@ -5,6 +5,11 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const {game}=require("./engine-harness.cjs");
+// Independent fixture from the supplied balance table; health remains a percentage.
+const balanceReference={jairo:[8,98,26],paula:[8,92,27],facu:[9,95,25],padrino:[9,102,25],galante:[8,120,23],sergio:[10,116,22],blotta:[11,90,24],tunki:[8,122,25],marechal:[8,88,28],flor:[10,92,24]};
+const afterHit=(g,damage,target='cpu')=>Math.round((100-Math.round(damage*100000/balanceReference[g.run(target+'.kind')][1])/1000)*1000)/1000;
+const afterPower=(g,multiplier=1)=>afterHit(g,balanceReference[g.run('player.kind')][2]*.5*multiplier);
+const afterNormal=(g,base)=>afterHit(g,base*balanceReference[g.run('player.kind')][0]/10);
 
 test("neutral jump has its own pose and never inflicts a kick", () => {
   const g = game();
@@ -53,7 +58,7 @@ test("guard blocks frontal melee while an unguarded hit deals damage", () => {
   g.tick(.2);
   g.key("KeyI", "keyup");
   g.run('hit(player, 10, -170, 0, cpu, {sourceX: cpu.x, low:false})');
-  assert.equal(g.run("player.health"), 90);
+  assert.equal(g.run("player.health"), afterHit(g,10,"player"));
 });
 
 test("low attacks bypass standing guard but crouching guard blocks them", () => {
@@ -63,7 +68,7 @@ test("low attacks bypass standing guard but crouching guard blocks them", () => 
     if (crouched) g.key("ArrowDown");
     g.key("ShiftLeft");
     g.run('hit(player, 9, -170, 0, cpu, {sourceX: cpu.x, low:true})');
-    assert.equal(g.run("player.health"), crouched ? 100 : 91);
+    assert.equal(g.run("player.health"), crouched ? 100 : afterHit(g,9,"player"));
   }
 });
 
@@ -199,7 +204,7 @@ test("Tunki's flower projectile spends energy once and damages the opponent once
   assert.equal(g.run("projectiles[0].style"), "flowers");
   assert.equal(g.run("poseFor(player)"), 4);
   g.tick(.75);
-  assert.equal(g.run("cpu.health"), 86);
+  assert.equal(g.run("cpu.health"), afterPower(g));
   assert.equal(g.run("projectiles.length"), 0);
   assert.equal(g.run('attack(cpu, "slam")'), false);
 });
@@ -208,7 +213,7 @@ test("Tunki's neutral jump does no damage; deliberate slam dives and hits once",
   const g = game();
   g.run('startGame("tunki"); state = "playing"; player.x = 300; cpu.x = 410;');
   g.key("KeyW");
-  g.tick(1);
+  g.tick(1.2);
   assert.equal(g.run("cpu.health"), 100);
   g.run("player.x = 300; cpu.x = 410;");
   g.key("KeyH");
@@ -218,7 +223,7 @@ test("Tunki's neutral jump does no damage; deliberate slam dives and hits once",
   g.tick(.2);
   assert.equal(g.run("player.grounded"), false);
   g.tick(1.1);
-  assert.equal(g.run("cpu.health"), 82);
+  assert.equal(g.run("cpu.health"), afterPower(g,1.4));
   assert.equal(g.run("player.grounded"), true);
   assert.equal(g.run("player.action"), "idle");
 });
@@ -246,7 +251,7 @@ test("standing guard blocks a slam, crouch guard does not, and distance evades i
     const g = game();
     g.run('startGame("tunki"); state = "playing"; player.x = 300; cpu.x = 385; cpu.facing = -1; cpu.guarding = true; cpu.crouching = ' + crouched + ';');
     g.run('hit(cpu, 18, 290, -180, player, {sourceX: player.x, overhead: true});');
-    assert.equal(g.run("cpu.health"), crouched ? 82 : 100);
+    assert.equal(g.run("cpu.health"), crouched ? afterHit(g,18) : 100);
   }
   const g = game();
   g.run('startGame("tunki"); state = "playing";');
@@ -318,7 +323,7 @@ test("Marechal's hand lightning travels straight and spends power once on PC and
     g.tick(.1);
     assert.equal(g.run("projectiles[0].y"), y);
     g.tick(.5);
-    assert.equal(g.run("cpu.health"), 87);
+    assert.equal(g.run("cpu.health"), afterPower(g));
     assert.equal(g.run("projectiles.length"), 0);
     assert.equal(g.run('attack(player, "special")'), false);
   }
@@ -331,7 +336,7 @@ test("Marechal's lightning can be blocked or ducked like other high projectiles"
     g.run(defense === "guard" ? 'cpu.guarding = true;' : 'cpu.crouching = true;');
     g.key("KeyL");
     g.tick(.8);
-    assert.equal(g.run("cpu.health"), defense === "guard" ? 99 : 100);
+    assert.equal(g.run("cpu.health"), defense === "guard" ? afterHit(g,1) : 100);
   }
 });
 
@@ -353,7 +358,7 @@ test("stance transitions interpolate, backward steps reverse, and attacks settle
     g.key("KeyA", "keyup");
     g.tick(.3);
     g.key("KeyK");
-    g.tick(.42);
+    g.tick(.55);
     assert.notEqual(g.run("poseFor(player)"), g.run("POSES[player.kind].kick"));
     g.tick(.3);
     assert.equal(g.run("player.animation.pose"), 0);
@@ -516,7 +521,7 @@ test("timeout awards the healthier fighter and ties replay without awarding a wi
 
 test("simultaneous lethal hits draw the round and pause freezes the interval", () => {
   const g = game();
-  g.run('player.x = 300; cpu.x = 355; player.health = cpu.health = 3; attack(player, "punch"); attack(cpu, "punch");');
+  g.run('player.x = 300; cpu.x = 355; player.health = cpu.health = 1; attack(player, "punch"); attack(cpu, "punch");');
   g.tick(.12);
   assert.equal(g.run("player.health + cpu.health"), 0);
   assert.equal(g.run("match.playerWins + match.cpuWins"), 0);
@@ -536,7 +541,7 @@ test("all fighters jump higher, remain in view and land without dealing automati
     const g = game();
     g.run('startGame("' + kind + '"); state = "playing"; var minY = FLOOR;');
     g.key("KeyW");
-    g.run("for (let i=0; i<120; i++) { update(STEP); minY = Math.min(minY, player.y); }");
+    g.run("for (let i=0; i<160; i++) { update(STEP); minY = Math.min(minY, player.y); }");
     const ratio = g.run("(FLOOR - minY) / (stats[player.kind].jump ** 2 / 3300)");
     assert.ok(ratio > 1.5 && ratio < 1.6, kind + ": " + ratio);
     assert.ok(g.run("minY - stats[player.kind].height * FIGHTER_SCALE > 70"));
@@ -639,10 +644,10 @@ test("all four fighters uppercut with down+punch on keyboard and touch, launch o
       assert.equal(g.run("cpu.health"), 100);
       assert.equal(g.run("poseFor(player)"), 12);
       g.tick(.08);
-      assert.equal(g.run("cpu.health"), 95);
+      assert.equal(g.run("cpu.health"), afterNormal(g,5));
       assert.ok(g.run("cpu.vy < 0 && !cpu.grounded"));
       g.tick(.8);
-      assert.equal(g.run("cpu.health"), 95);
+      assert.equal(g.run("cpu.health"), afterNormal(g,5));
       assert.equal(g.run("player.action"), "idle");
       assert.equal(g.run("poseFor(player)"), 8);
     }
@@ -718,7 +723,7 @@ test("power audio begins during execution, continues after casting, and stops on
       g.tick(1.4);
       assert.equal(g.run("projectiles.length"), 0);
       assert.equal(g.run("combatSounds.size"), 0);
-      assert.equal(g.run("cpu.health"), block ? 99 : kind === "sergio" ? 90 : 87);
+      assert.equal(g.run("cpu.health"), block ? afterHit(g,1) : kind === "sergio" ? afterHit(g,10) : afterPower(g));
     }
   }
 });
@@ -808,7 +813,7 @@ test('both phone players hold and attack simultaneously with independent pointer
 
 test('score rewards actual damage, survives rounds and registers the second player winner', async () => {
   const g=game(); g.run('gameMode="versus"; hit(player,10,-10,0,cpu,{sourceX:cpu.x})');
-  assert.equal(g.run('match.scores[1]'),100); assert.equal(g.run('match.scores[0]'),0);
+  assert.equal(g.run('match.scores[1]'),Math.round((100-afterHit(g,10,'player'))*10)); assert.equal(g.run('match.scores[0]'),0);
   g.run('finishRound(cpu,"K.O.")'); const score=g.run('match.scores[1]'); g.tick(2.8);
   assert.equal(g.run('match.scores[1]'),score); assert.notEqual(g.nodes.get('resultKicker').textContent,'GAME OVER');
   g.run('state="playing"; finishRound(cpu,"K.O.")'); g.tick(2.3);
@@ -908,7 +913,7 @@ test('Facu throws once, visibly loses his mustache and catches it after moving a
  assert.notEqual(g.run('spriteFrame(renderedFighter(player))'),withMustache);
  g.tick(.3);g.run('player.power=100; player.specialCooldown=0');
  assert.equal(g.run('attack(player,"special")'),false);assert.equal(g.run('player.power'),100);
- g.key('KeyA');g.key('KeyW');g.tick(1.7);
+ g.key('KeyA');g.key('KeyW');g.tick(3.8);
  assert.equal(g.run('player.mustacheAway'),false);assert.equal(g.run('projectiles.length'),0);
  assert.equal(g.run('combatSounds.size'),0);
 });
@@ -918,10 +923,10 @@ test('boomerang returns on close hit or block, deals damage once and survives pa
   const g=game();g.run('startGame("facu","blotta"); state="playing"; player.x=300; cpu.x=369; cpu.facing=-1');
   if(guarded)g.run('cpu.guardTime=2; cpu.guarding=true');
   g.key('KeyL');g.tick(.34);
-  assert.equal(g.run('cpu.health'),guarded?99:87);
+  assert.equal(g.run('cpu.health'),guarded?afterHit(g,1):afterPower(g));
   g.key('Space');const snapshot=g.run('JSON.stringify([projectiles.map(p=>[p.x,p.y,p.age,p.returning]),player.mustacheAway,roundTime])');
   g.tick(1);assert.equal(g.run('JSON.stringify([projectiles.map(p=>[p.x,p.y,p.age,p.returning]),player.mustacheAway,roundTime])'),snapshot);
-  g.key('Space');g.tick(1.5);assert.equal(g.run('cpu.health'),guarded?99:87);assert.equal(g.run('player.mustacheAway'),false);
+  g.key('Space');g.tick(1.5);assert.equal(g.run('cpu.health'),guarded?afterHit(g,1):afterPower(g));assert.equal(g.run('player.mustacheAway'),false);
  }
 });
 
@@ -950,7 +955,7 @@ test('Flor hockey deals special damage once, blocks and starts audio at point bl
   const g=game();g.run('startGame("flor","blotta");state="playing";player.x=300;cpu.x=360;cpu.facing=-1');enableCombatAudio(g);
   if(guard)g.run('cpu.guardTime=2;cpu.guarding=true');
   g.key('KeyL');assert.equal(g.run('combatLog.filter(e=>e.event==="start"&&e.name==="hockey").length'),1);
-  g.tick(.5);assert.equal(g.run('cpu.health'),guard?99:87);assert.equal(g.run('projectiles.length'),0);
+  g.tick(.5);assert.equal(g.run('cpu.health'),guard?afterHit(g,1):afterPower(g));assert.equal(g.run('projectiles.length'),0);
  }
  const g=game();g.run('startGame("flor","sergio");state="playing";player.x=200;cpu.x=800');
  g.taps[3].listeners.pointerdown({pointerId:44,preventDefault(){}});g.tick(.23);
@@ -1005,7 +1010,7 @@ test('jump kick aims down in both directions, hits a lower rival once and misses
   g.key('KeyK');assert.equal(g.run('player.kickStyle'),'airKick');g.run('player.actionTime=player.actionDuration-.15');
   assert.equal(g.run('poseFor(player)'),13);assert.ok(g.run('attackContact(player,cpu)?.overhead'));
   g.run('cpu.y=FLOOR-260');assert.equal(g.run('attackContact(player,cpu)'),null);
-  g.run('cpu.y=FLOOR');g.tick(.14);assert.equal(g.run('cpu.health'),96);g.tick(.5);assert.equal(g.run('cpu.health'),96);
+  g.run('cpu.y=FLOOR');g.tick(.14);assert.equal(g.run('cpu.health'),afterNormal(g,4));g.tick(.5);assert.equal(g.run('cpu.health'),afterNormal(g,4));
  }
 });
 test('back plus kick creates a grounded spinning volley relative to facing for both players',()=>{
@@ -1105,8 +1110,8 @@ test('Galante whip reaches both ends, hits once, plays audio and allows guard or
   if(defense==='jump')g.run('cpu.y=FLOOR-220;cpu.grounded=false;cpu.vy=-100');
   enableCombatAudio(g);g.key('KeyL');assert.equal(g.run('player.specialStyle'),'whip');
   assert.equal(g.run('combatLog.filter(e=>e.event==="start"&&e.name==="whip").length'),1);
-  g.tick(.23);assert.equal(g.run('cpu.health'),defense==='guard'?99:defense==='jump'?100:87);
-  g.tick(.4);assert.equal(g.run('cpu.health'),defense==='guard'?99:defense==='jump'?100:87);
+  g.tick(.23);assert.equal(g.run('cpu.health'),defense==='guard'?afterHit(g,1):defense==='jump'?100:afterPower(g));
+  g.tick(.4);assert.equal(g.run('cpu.health'),defense==='guard'?afterHit(g,1):defense==='jump'?100:afterPower(g));
   assert.equal(g.run('projectiles.length'),0);
  }
 });
@@ -1138,15 +1143,15 @@ test('Padrino dachshund flies both ways, hits once, respects guard and uses the 
   const g=game();g.run(`startGame('padrino','sergio');state='playing';player.power=100;player.x=${direction>0?180:730};cpu.x=player.x+${direction*distance};player.facing=${direction};cpu.facing=${-direction};cpu.guardTime=${guarding?3:0};cpu.guarding=${guarding}`);
   enableCombatAudio(g);g.key('KeyL');assert.equal(g.run('player.specialStyle'),'dog');assert.equal(g.run('player.power'),65);
   assert.equal(g.run('combatLog.filter(e=>e.event==="start"&&e.name==="dog").length'),1);
-  g.tick(.22);if(distance>100){assert.equal(g.run('projectiles[0].style'),'dog');assert.equal(g.run('Math.sign(projectiles[0].vx)'),direction);g.run('draw()');}
-  g.tick(1.1);assert.equal(g.run('cpu.health'),guarding?99:87);assert.equal(g.run('projectiles.length'),0);
-  g.tick(.3);assert.equal(g.run('cpu.health'),guarding?99:87);
+  g.tick(.32);if(distance>100){assert.equal(g.run('projectiles[0].style'),'dog');assert.equal(g.run('Math.sign(projectiles[0].vx)'),direction);g.run('draw()');}
+  g.tick(1.1);assert.equal(g.run('cpu.health'),guarding?afterHit(g,1):afterPower(g));assert.equal(g.run('projectiles.length'),0);
+  g.tick(.3);assert.equal(g.run('cpu.health'),guarding?afterHit(g,1):afterPower(g));
   g.run('stopAllCombatSounds()');assert.equal(g.run('combatSounds.size+soundTails.size'),0);
  }
 });
 test('Padrino bark retains an audible close-hit tail and stops on pause',()=>{
- const g=game();g.run('startGame("padrino","sergio");state="playing";player.x=300;cpu.x=385');enableCombatAudio(g);g.key('KeyL');g.tick(.25);
- assert.equal(g.run('cpu.health'),87);assert.equal(g.run('soundTails.size'),1);g.key('Space');assert.equal(g.run('soundTails.size'),0);
+ const g=game();g.run('startGame("padrino","sergio");state="playing";player.x=300;cpu.x=385');enableCombatAudio(g);g.key('KeyL');g.tick(.35);
+ assert.equal(g.run('cpu.health'),afterPower(g));assert.equal(g.run('soundTails.size'),1);g.key('Space');assert.equal(g.run('soundTails.size'),0);
  assert.ok(fs.statSync(path.join(__dirname,'../assets/padrino-bark-v1.wav')).size>10000);
 });
 
@@ -1187,7 +1192,7 @@ test('Paula water reaches distant enemies both ways, hits once, is blockable and
   enableCombatAudio(g);g.key('KeyL');assert.equal(g.run('player.specialStyle'),'water');assert.equal(g.run('player.power'),65);
   assert.equal(g.run('combatLog.filter(e=>e.event==="start"&&e.name==="water").length'),1);g.tick(.3);
   if(distance>100){assert.equal(g.run('projectiles[0].style'),'water');assert.equal(g.run('projectiles[0].vy'),0);g.run('draw()');}
-  g.tick(1);assert.equal(g.run('cpu.health'),guard?99:87);assert.equal(g.run('projectiles.length'),0);g.tick(.2);assert.equal(g.run('cpu.health'),guard?99:87);
+  g.tick(1);assert.equal(g.run('cpu.health'),guard?afterHit(g,1):afterPower(g));assert.equal(g.run('projectiles.length'),0);g.tick(.2);assert.equal(g.run('cpu.health'),guard?afterHit(g,1):afterPower(g));
  }
 });
 test('water flight and sound pause together and jumping can evade the stream',()=>{
@@ -1218,9 +1223,9 @@ test('critical line reaches both directions once, briefly locks unguarded target
  for(const direction of [-1,1])for(const guard of [false,true]) {
   const g=game();g.run(`startGame('jairo','sergio');state='playing';player.x=${direction>0?150:850};cpu.x=player.x+${direction*650};player.facing=${direction};cpu.facing=${-direction};cpu.guardTime=3;cpu.guarding=${guard}`);
   enableCombatAudio(g);g.key('KeyL');g.tick(.6);g.run('draw()');
-  assert.equal(g.run('cpu.health'),guard?99:89);
+  assert.equal(g.run('cpu.health'),guard?afterHit(g,1):afterPower(g));
   if(!guard){assert.equal(g.run('cpu.action'),'hit');assert.equal(g.run('jump(cpu)'),false);assert.equal(g.run('attack(cpu,"punch")'),false);}
-  g.tick(1);assert.equal(g.run('cpu.health'),guard?99:89);assert.notEqual(g.run('cpu.action'),'hit');
+  g.tick(1);assert.equal(g.run('cpu.health'),guard?afterHit(g,1):afterPower(g));assert.notEqual(g.run('cpu.action'),'hit');
   assert.equal(g.run('combatLog.filter(e=>e.event==="start"&&e.name==="critical"&&e.offset===0).length'),1);
  }
 });
@@ -1232,7 +1237,7 @@ test('critical line can be avoided by crouching or rolling and is audible at poi
   g.key('KeyL');g.tick(.4);assert.equal(g.run('cpu.health'),100);
  }
  const g=game();g.run('startGame("jairo","sergio");state="playing";player.x=300;cpu.x=385');enableCombatAudio(g);g.key('KeyL');g.tick(.3);
- assert.equal(g.run('cpu.health'),89);assert.ok(g.run('combatSounds.size')>0);
+ assert.equal(g.run('cpu.health'),afterPower(g));assert.ok(g.run('combatSounds.size')>0);
 });
 
 test('falling schedule bars target a fixed location, deal bounded damage, respect guard and pause',()=>{

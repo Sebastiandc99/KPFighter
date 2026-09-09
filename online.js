@@ -61,7 +61,7 @@
   }
   choose(kind){if(this.ready)return;this.kind=kind;this.sendLobby();}
   confirm(){if(!this.active||!this.peer||this.ready)return;this.ready=true;this.sendLobby();this.a.selection(this.remoteKind,this.remoteReady,true);this.tryStart();}
-  sendLobby(){this.send({type:'hello',kind:this.kind,ready:this.ready,started:this.started});}
+  sendLobby(){this.send({type:'hello',rules:2,kind:this.kind,ready:this.ready,started:this.started});}
   tryStart(){if(!this.guest&&this.ready&&this.remoteReady&&!this.started){this.started=true;this.a.start(this.kind,this.remoteKind);this.sendFrame();}}
   input(holds,action){
    if(!this.active)return;this.holds=cleanHold(holds);
@@ -92,6 +92,7 @@
    if(m.type==='pong'){const ping=Math.round(now()-m.at);if(ping>=0&&ping<10000)this.status('Rival conectado · PING: '+ping+' ms');return;}
    if(m.type==='rtc'){if(via==='relay')this.receiveRTC(m).catch(()=>{this.direct=false;});return;}
    if(m.type==='hello'){
+    if(m.rules!==2){this.fail('Versiones distintas. Ambos deben recargar el juego y crear otra sala.');return;}
     if(!this.a.validKind(m.kind))return;
     if(!this.peer){this.peer=true;this.a.openSelection(this.guest?2:1);this.status('Rival conectado.');if(!this.guest)this.startRTC().catch(()=>{});}
     this.remoteKind=m.kind;this.remoteReady=m.ready===true;this.a.selection(this.remoteKind,this.remoteReady,this.ready);this.tryStart();return;

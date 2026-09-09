@@ -83,3 +83,16 @@ test('host clock continues without animation frames and guest power indicator us
  p.host.run('player.power=0;cpu.power=100;cpu.specialCooldown=0;updateHud()');p.frame();
  assert.equal(p.guest.taps[3].classList.contains('ready'),true);assert.equal(p.host.taps[3].classList.contains('ready'),false);
 });
+
+test('online rejects incompatible combat rules with a clear return-to-menu message',()=>{
+ const p=pair();p.host.run('online.receive({v:1,type:"hello",kind:"sergio",ready:false,rules:1},"relay")');
+ assert.equal(p.host.run('online.active'),false);assert.match(p.host.nodes.get('onlineMessage').textContent,/Versiones distintas/);
+});
+test('resistance and scaled recovery remain authoritative for a heavy online guest',()=>{
+ const p=pair();p.start('blotta','tunki');p.host.run('state="playing";player.x=300;cpu.x=360');p.frame();
+ p.host.key('KeyJ');const hostRecovery=p.host.run('player.moveSpec.recovery');p.host.tick(.2);p.frame();
+ assert.equal(p.host.run('cpu.health'),97.295);assert.equal(p.guest.run('cpu.health'),97.295);
+ p.host.tick(.6);p.guest.key('KeyJ');p.frame();
+ assert.ok(p.host.run('cpu.moveSpec.recovery')>hostRecovery);
+ assert.ok(Math.abs(p.host.run('cpu.actionDuration')-p.guest.run('cpu.actionDuration'))<.001);
+});

@@ -205,3 +205,24 @@ Pruebas: `node --test tests/*.test.cjs`. Referencias del transporte: https://sup
 La función admite las claves modernas del entorno (`SUPABASE_SECRET_KEYS` y `SUPABASE_PUBLISHABLE_KEYS`), con compatibilidad con las variables anteriores. Las claves modernas se envían solo en `apikey`; `Authorization` se reserva para JWT. Los errores muestran un código de diagnóstico sin revelar respuestas internas ni credenciales. El host mantiene un reloj compartido entre el render y la comunicación para que una pausa del render no detenga la simulación.
 
 Validación de esta versión: 104 pruebas automatizadas (98 del combate e integración, 6 del servicio de salas). Las pruebas del servicio usan Node 24 para ejecutar el TypeScript sin dependencias.
+
+### Balance de personajes · 20260909a
+
+Se aplica la tabla de referencia del usuario sin cambiar la escala general del combate. La vida visible sigue siendo un porcentaje de 0 a 100: el daño recibido se multiplica por `100 / resistencia`. Un golpe fuerte de referencia 10 equivale al gancho base de 5 puntos del motor; los demás golpes conservan sus proporciones y el panzazo de Sergio conserva su bonificación. El daño del poder de referencia se divide por dos. Carne y fernet conservan su diferencia (10/12, promedio 11); el aplastamiento de La Tunki hace 1,4 veces su poder base y Crash Schedule reparte hasta 1,35 veces el poder de Jairo entre cuatro barras, manteniendo sus costes y posibilidad de evadirlas.
+
+| Personaje | Daño normal de referencia | Resistencia | Poder de referencia | Velocidad / 10 |
+| --- | ---: | ---: | ---: | ---: |
+| Jairo | 8 | 98 | 26 | 7 |
+| Paula | 8 | 92 | 27 | 7 |
+| Facu | 9 | 95 | 25 | 8 |
+| El Padrino | 9 | 102 | 25 | 6 |
+| Galante | 8 | 120 | 23 | 3 |
+| Sergio | 10 | 116 | 22 | 4 |
+| Blotta | 11 | 90 | 24 | 9 |
+| La Tunki | 8 | 122 | 25 | 2 |
+| Marechal | 8 | 88 | 28 | 7 |
+| Flor | 10 | 92 | 24 | 9 |
+
+La imagen suministrada no incluía velocidad numérica; los niveles se definieron según sus perfiles. La velocidad afecta el desplazamiento, la recuperación de golpes y poderes, el tiempo de subida/bajada de los saltos y la duración de rodadas/humo. Los saltos conservan aproximadamente la misma altura y las rodadas la misma distancia de escape. El Padrino tarda algo más en iniciar el poder, como indica su perfil.
+
+El bigote de Facu ya no vuelve después de 0,62 segundos: si falla, llega al borde visible correspondiente a la cámara y vuelve a su dueño. Conserva el giro, estela, sonido, pérdida temporal del bigote, un solo impacto por lanzamiento y regreso anticipado al golpear o ser bloqueado. Las sesiones online detectan reglas de combate distintas y piden recargar ambos dispositivos antes de jugar.
