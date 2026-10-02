@@ -32,8 +32,8 @@ function captureOnlineFrame(){
 }
 function validOnlineFrame(f){
  return f&&['intro','playing','paused','roundOver','finished'].includes(f.state)&&f.match&&[1,2,3].includes(f.match.round)
- &&stats[f.match.playerKind]&&stats[f.match.cpuKind]&&Array.isArray(f.fighters)&&f.fighters.length===2
- &&f.fighters.every(p=>stats[p.kind]&&['x','y','vx','vy','health','power'].every(k=>Number.isFinite(p[k]))&&p.health>=0&&p.health<=100)
+ &&roster.includes(f.match.playerKind)&&roster.includes(f.match.cpuKind)&&Array.isArray(f.fighters)&&f.fighters.length===2
+ &&f.fighters.every(p=>roster.includes(p.kind)&&['x','y','vx','vy','health','power'].every(k=>Number.isFinite(p[k]))&&p.health>=0&&p.health<=100)
  &&Array.isArray(f.projectiles)&&f.projectiles.length<80&&Array.isArray(f.particles)&&f.particles.length<=60
  &&Array.isArray(f.effects)&&f.effects.length<=32&&Array.isArray(f.afterimages)&&f.afterimages.length<=12&&stages[f.stageChoice];
 }
@@ -90,7 +90,7 @@ online=new window.KPOnline(window.KP_ONLINE_CONFIG,{
  remoteAction:action=>performAction(action,2,true),
  pause:wanted=>{if((state==='paused')!==wanted)togglePause(true);},
  advance:t=>{if(t-lastTime>=80){advanceGameClock(t);updateHud();}},
- validKind:kind=>Object.hasOwn(stats,kind),capture:captureOnlineFrame,validFrame:validOnlineFrame,apply:applyOnlineFrame,sound:onlineSound,
+ validKind:kind=>roster.includes(kind),capture:captureOnlineFrame,validFrame:validOnlineFrame,apply:applyOnlineFrame,sound:onlineSound,
  disconnected:text=>{
   if(state==='finished'&&match.complete){onlineEl('onlineStatus').textContent=text;return;}
   stopAllCombatSounds();stopRoundVoice();clearHeld();setPauseUI(false);state='online';selectMusic('title');

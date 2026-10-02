@@ -65,11 +65,11 @@ test('dropped inputs retry without duplicate hits and stale frames cannot rewind
 test('lost connection clears controls and returns an exit screen; local modes remain available',()=>{
  const p=pair();p.start();p.host.run('state="playing"');p.frame();p.guest.key('KeyD');
  p.guest.run('performance.now=()=>9000;online.tick()');assert.equal(p.guest.run('online.active'),false);assert.equal(p.guest.run('state'),'online');assert.equal(p.guest.run('held.right'),false);
- p.guest.run('mainMenu();startMode("solo");beginGame()');assert.equal(p.guest.run('campaign.opponents.length'),9);
+ p.guest.run('mainMenu();startMode("solo");beginGame()');assert.equal(p.guest.run('campaign.opponents.length'),7);
  p.guest.run('mainMenu();startMode("versus");startGame("sergio","jairo");state="playing"');p.guest.key('Digit7');assert.equal(p.guest.run('cpu.action'),'punch');
 });
 test('all character powers, projectiles and effects serialize without shared engine objects',()=>{
- for(const kind of ['sergio','blotta','tunki','marechal','facu','flor','galante','padrino','paula','jairo']){
+ for(const kind of ['sergio','blotta','marechal','facu','flor','padrino','paula','jairo']){
   const p=pair();p.start(kind,'sergio');p.host.run('state="playing";player.power=100;attack(player,"special")');p.host.tick(.4);p.frame();
   assert.equal(p.guest.run('player.specialStyle'),p.host.run('player.specialStyle'));p.guest.run('draw()');
   assert.equal(p.guest.run('projectiles.length'),p.host.run('projectiles.length'));
@@ -85,13 +85,13 @@ test('host clock continues without animation frames and guest power indicator us
 });
 
 test('online rejects incompatible combat rules with a clear return-to-menu message',()=>{
- const p=pair();p.host.run('online.receive({v:1,type:"hello",kind:"sergio",ready:false,rules:1},"relay")');
+ const p=pair();p.host.run('online.receive({v:1,type:"hello",kind:"sergio",ready:false,rules:2},"relay")');
  assert.equal(p.host.run('online.active'),false);assert.match(p.host.nodes.get('onlineMessage').textContent,/Versiones distintas/);
 });
 test('resistance and scaled recovery remain authoritative for a heavy online guest',()=>{
- const p=pair();p.start('blotta','tunki');p.host.run('state="playing";player.x=300;cpu.x=360');p.frame();
+ const p=pair();p.start('blotta','sergio');p.host.run('state="playing";player.x=300;cpu.x=360');p.frame();
  p.host.key('KeyJ');const hostRecovery=p.host.run('player.moveSpec.recovery');p.host.tick(.2);p.frame();
- assert.equal(p.host.run('cpu.health'),97.295);assert.equal(p.guest.run('cpu.health'),97.295);
+ assert.equal(p.host.run('cpu.health'),97.155);assert.equal(p.guest.run('cpu.health'),97.155);
  p.host.tick(.6);p.guest.key('KeyJ');p.frame();
  assert.ok(p.host.run('cpu.moveSpec.recovery')>hostRecovery);
  assert.ok(Math.abs(p.host.run('cpu.actionDuration')-p.guest.run('cpu.actionDuration'))<.001);

@@ -112,7 +112,9 @@ function timedMove(f, spec, evasion=false) {
   return {...spec, startup:spec.startup/(evasion?tempo:1), active:spec.active/(evasion?tempo:1), recovery:spec.recovery/tempo};
 }
 
-const roster = ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante", "padrino", "paula", "jairo"];
+const roster = ["sergio", "blotta", "marechal", "facu", "flor", "padrino", "paula", "jairo"];
+// Atlas cells retain their original positions independently of the playable roster.
+const uppercutAtlasKinds = ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante", "padrino", "paula", "jairo"];
 const FLOOR = 448;
 const STEP = 1 / 120;
 const JUMP_BOOST = 1.25;
@@ -350,7 +352,7 @@ function showScreen(screen) {
 function chooseFighter(kind, playSound = true) {
   if (online?.active && online.ready) return;
   if(kind === "random") kind=roster[Math.floor(Math.random()*roster.length)];
-  if (!stats[kind]) return;
+  if (!roster.includes(kind)) return;
   if (selectionPlayer === 2) opponentChoice = kind;
   else playerChoice = kind;
   document.getElementById("selectionPlayer").textContent = selectionPlayer + "P";
@@ -1784,7 +1786,7 @@ function spriteFrame(frame) {
   const movement = frame.pose >= 6 && !uppercut;
   const image = uppercut ? assets.uppercuts : assets[frame.kind + (movement ? "Motion" : "")];
   if (!image.complete || !image.naturalWidth) return null;
-  const pose = uppercut ? roster.indexOf(frame.kind) : frame.pose % 6;
+  const pose = uppercut ? uppercutAtlasKinds.indexOf(frame.kind) : frame.pose % 6;
   const cell = 270;
   const surface = document.createElement("canvas");
   surface.width = surface.height = cell;
@@ -2628,7 +2630,7 @@ window.addEventListener("keydown", event => {
     return;
   }
   if (state === "select") {
-    const offsets={KeyA:-1,ArrowLeft:-1,KeyD:1,ArrowRight:1,KeyW:-5,ArrowUp:-5,KeyS:5,ArrowDown:5};
+    const offsets={KeyA:-1,ArrowLeft:-1,KeyD:1,ArrowRight:1,KeyW:-4,ArrowUp:-4,KeyS:4,ArrowDown:4};
     if (code in offsets) {
       const selected = selectionPlayer === 2 ? opponentChoice : playerChoice;
       const choices=roster;

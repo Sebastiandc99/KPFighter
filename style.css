@@ -1015,11 +1015,11 @@ button, .name-row strong, .choice-tile strong, .stage-card strong { font-weight:
 .portrait-galante img { object-fit: contain; object-position: center bottom; filter: drop-shadow(4px 6px 2px rgba(0,0,0,.5)); }
 .choice-tile[data-pick="galante"] img { object-fit: contain; object-position: center; background: #142341; }
 
-/* Symmetric ten-fighter roster. */
+/* Symmetric eight-fighter roster. */
 .select-screen .choice-dock, .phone-portrait .select-screen .choice-dock {
-  left: 69%; top: 39%; bottom: auto; width: 54%;
+  left: 69%; top: 39%; bottom: auto; width: 43.2%;
 }
-.choice-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: clamp(4px, .65cqw, 9px); width: 100%; }
+.choice-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: clamp(4px, .65cqw, 9px); width: 100%; }
 .select-screen .choice-tile, .phone-portrait .select-screen .choice-tile { width: 100%; min-width: 0; }
 .choice-tile.selected { transform: none; }
 .select-screen .confirm-btn { margin-top: 5%; font-size: clamp(10px, 1.7cqw, 22px); }

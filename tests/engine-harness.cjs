@@ -22,8 +22,8 @@ function game() {
     }
     return nodes.get(id);
   }
-  const picks = ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante", "padrino", "paula", "jairo"].map(kind => node("pick-" + kind, { pick: kind }));
-  const portraits = ["sergio", "blotta", "tunki", "marechal", "facu", "flor", "galante", "padrino", "paula", "jairo"].map(kind => node("portrait-" + kind, { portrait: kind }));
+  const picks = ["sergio", "blotta", "marechal", "facu", "flor", "padrino", "paula", "jairo"].map(kind => node("pick-" + kind, { pick: kind }));
+  const portraits = ["sergio", "blotta", "marechal", "facu", "flor", "padrino", "paula", "jairo"].map(kind => node("portrait-" + kind, { portrait: kind }));
   const stages = ["arcade", "mine", "newmont"].map(stage => node("stage-" + stage, { stage }));
   const leftRounds = [0, 1].map(i => node("left-round-" + i));
   const rightRounds = [0, 1].map(i => node("right-round-" + i));
